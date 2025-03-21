@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TCP Fingerprint</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 15px;
+            overflow: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>TCP Fingerprint</h1>
+    <div class="form-group">
+        <label for="x-forwarded-for">X-Forwarded-For:</label>
+        <input type="text" id="x-forwarded-for" placeholder="Enter IP address">
+    </div>
+    <div class="form-group">
+        <label for="x-remote-port">X-Remote-Port:</label>
+        <input type="text" id="x-remote-port" placeholder="Enter port number">
+    </div>
+    <button onclick="sendRequest()">Send Request</button>
+    <h2>Response:</h2>
+    <pre id="response">No response yet</pre>
+
+    <script>
+        async function sendRequest() {
+            const xForwardedFor = document.getElementById('x-forwarded-for').value;
+            const xRemotePort = document.getElementById('x-remote-port').value;
+            
+            const headers = {};
+            if (xForwardedFor) {
+                headers['X-Forwarded-For'] = xForwardedFor;
+            }
+            if (xRemotePort) {
+                headers['X-Remote-Port'] = xRemotePort;
+            }
+            
+            try {
+                const response = await fetch('/tcp-info', {
+                    method: 'GET',
+                    headers: headers
+                });
+                
+                const data = await response.json();
+                document.getElementById('response').textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('response').textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -3,8 +3,19 @@
 ip link show
 ```
 
-### Process packages
+### Build and run
 ```
-cargo build --release --examples
-sudo RUST_LOG=info RUST_BACKTRACE=1 ./target/release/examples/p0f -i <INTERFACE> -l <LOG_FILE.LOG>
+cargo build --release
+```
+```
+sudo RUST_LOG=info ./target/release/tcp-fingerprint --interface <interface>
+```
+
+
+### Build and run docker image
+```
+docker run -p 8080:8080 tcp-fingerprint
+```
+```
+docker run --network host tcp-fingerprint ./tcp-fingerprint --interface <interface>
 ```
