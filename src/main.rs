@@ -1,6 +1,7 @@
 use axum::http::HeaderMap;
 use axum::{extract::ConnectInfo, response::Json, routing::get, Router};
 use clap::Parser;
+use log::{debug, error, info};
 use passivetcp_rs::p0f_output::{
     HttpRequestOutput, HttpResponseOutput, MTUOutput, SynAckTCPOutput, SynTCPOutput, UptimeOutput,
 };
@@ -13,7 +14,6 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
 use tower_http::services::fs::ServeDir;
-use log::{debug, error, info};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -26,7 +26,7 @@ struct Args {
 struct TcpInfo {
     syn: Option<SynAckTCP>,
     syn_ack: Option<SynAckTCP>,
-    mtu: Option<MTU>,
+    mtu: Option<Mtu>,
     uptime: Option<Uptime>,
     http_request: Option<HttpRequest>,
     http_response: Option<HttpResponse>,
@@ -87,14 +87,14 @@ impl From<&HttpResponseOutput> for HttpResponse {
 }
 
 #[derive(Serialize, Clone)]
-struct MTU {
+struct Mtu {
     link: String,
     mtu: u16,
 }
 
-impl From<&MTUOutput> for MTU {
+impl From<&MTUOutput> for Mtu {
     fn from(output: &MTUOutput) -> Self {
-        MTU {
+        Mtu {
             link: output.link.clone(),
             mtu: output.mtu,
         }
@@ -245,7 +245,7 @@ async fn main() {
                 tcp_info.syn_ack = Some(SynAckTCP::from(syn_ack));
             }
             if let Some(mtu) = &output.mtu {
-                tcp_info.mtu = Some(MTU::from(mtu));
+                tcp_info.mtu = Some(Mtu::from(mtu));
             }
             if let Some(uptime) = &output.uptime {
                 tcp_info.uptime = Some(Uptime::from(uptime));
