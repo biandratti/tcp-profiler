@@ -154,7 +154,7 @@ async fn get_tcp_info(
         .and_then(|value| value.parse::<u16>().ok())
         .unwrap_or_else(|| addr.port());
 
-    debug!(
+    info!(
         "HTTP Request from IP: {} and port: {} looking up TCP info",
         client_ip, client_port
     );
