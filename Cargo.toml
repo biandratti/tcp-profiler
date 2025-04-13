@@ -11,4 +11,4 @@ passivetcp-rs = "0.1.0-beta.2"
 tower-http = { version = "0.6.2", features = ["fs", "cors"] }
 env_logger = "0.11.8"
 clap = { version = "4.5.35", features = ["derive"] }
-log = "0.4.26"
+log = "0.4.27"
