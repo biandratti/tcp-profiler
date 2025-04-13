@@ -19,9 +19,9 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /usr/src/app/target/release/tcp-fingerprint /app/
+COPY --from=builder /usr/src/app/target/release/tcp-profiler /app/
 COPY --from=builder /usr/src/app/static /app/static
 
 EXPOSE 8080
 
-CMD ["./tcp-fingerprint"]
+CMD ["./tcp-profiler"]

@@ -8,14 +8,14 @@ ip link show
 cargo build --release
 ```
 ```
-sudo RUST_LOG=info ./target/release/tcp-fingerprint --interface <interface>
+sudo RUST_LOG=info ./target/release/tcp-profiler --interface <interface>
 ```
 
 
 ### Build and run docker image
 ```
-docker run -p 8080:8080 tcp-fingerprint
+docker build -t tcp-profiler .
 ```
 ```
-docker run --network host tcp-fingerprint ./tcp-fingerprint --interface <interface>
+docker run --network host tcp-profiler ./tcp-profiler --interface <interface>
 ```

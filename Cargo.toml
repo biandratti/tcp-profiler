@@ -1,5 +1,5 @@
 [package]
-name = "tcp-fingerprint"
+name = "tcp-profiler"
 version = "0.1.0"
 edition = "2021"
 
