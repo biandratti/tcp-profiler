@@ -658,8 +658,6 @@ dependencies = [
 [[package]]
 name = "passivetcp-rs"
 version = "0.1.0-beta.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efcc1b440c91094dc9a539d328f0968d36df707e938d4f9cdcffa78c01aa88d5"
 dependencies = [
  "crossbeam",
  "failure",

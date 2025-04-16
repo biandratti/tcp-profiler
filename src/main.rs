@@ -103,14 +103,28 @@ impl From<&MTUOutput> for Mtu {
 
 #[derive(Serialize, Clone)]
 struct SynAckTCP {
-    label: Option<String>,
+    os: String,
+    dist: Option<String>,
     sig: String,
+}
+
+fn extract_os_string(label: &Option<passivetcp_rs::db::Label>) -> String {
+    if let Some(label) = label {
+        if let Some(flavor) = &label.flavor {
+            format!("{} {}", label.name, flavor)
+        } else {
+            label.name.clone()
+        }
+    } else {
+        String::new()
+    }
 }
 
 impl From<&SynTCPOutput> for SynAckTCP {
     fn from(output: &SynTCPOutput) -> Self {
         SynAckTCP {
-            label: output.label.as_ref().map(|l| l.to_string()),
+            os: extract_os_string(&output.label),
+            dist: Some(output.sig.ittl.to_string()), //TODO: ttl need to be public type
             sig: output.sig.to_string(),
         }
     }
@@ -119,7 +133,8 @@ impl From<&SynTCPOutput> for SynAckTCP {
 impl From<&SynAckTCPOutput> for SynAckTCP {
     fn from(output: &SynAckTCPOutput) -> Self {
         SynAckTCP {
-            label: output.label.as_ref().map(|l| l.to_string()),
+            os: extract_os_string(&output.label),
+            dist: Some(output.sig.ittl.to_string()), //TODO: ttl need to be public type
             sig: output.sig.to_string(),
         }
     }
