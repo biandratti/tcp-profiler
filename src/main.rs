@@ -5,7 +5,7 @@ use log::{debug, error, info};
 use passivetcp_rs::p0f_output::{
     HttpRequestOutput, HttpResponseOutput, MTUOutput, SynAckTCPOutput, SynTCPOutput, UptimeOutput,
 };
-use passivetcp_rs::{db::Database, P0f};
+use passivetcp_rs::{db::Database, P0f, Ttl};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -104,7 +104,7 @@ impl From<&MTUOutput> for Mtu {
 #[derive(Serialize, Clone)]
 struct SynAckTCP {
     os: String,
-    dist: Option<String>,
+    dist: String,
     sig: String,
 }
 
@@ -120,11 +120,18 @@ fn extract_os_string(label: &Option<passivetcp_rs::db::Label>) -> String {
     }
 }
 
+fn extract_dist_string(ttl: &Ttl) -> String {
+    match ttl {
+        Ttl::Distance(_, hops) => hops.to_string(),
+        _ => String::new(),
+    }
+}
+
 impl From<&SynTCPOutput> for SynAckTCP {
     fn from(output: &SynTCPOutput) -> Self {
         SynAckTCP {
             os: extract_os_string(&output.label),
-            dist: Some(output.sig.ittl.to_string()), //TODO: ttl need to be public type
+            dist: extract_dist_string(&output.sig.ittl),
             sig: output.sig.to_string(),
         }
     }
@@ -134,7 +141,7 @@ impl From<&SynAckTCPOutput> for SynAckTCP {
     fn from(output: &SynAckTCPOutput) -> Self {
         SynAckTCP {
             os: extract_os_string(&output.label),
-            dist: Some(output.sig.ittl.to_string()), //TODO: ttl need to be public type
+            dist: extract_dist_string(&output.sig.ittl),
             sig: output.sig.to_string(),
         }
     }
