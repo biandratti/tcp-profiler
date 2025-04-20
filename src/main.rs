@@ -35,7 +35,7 @@ struct TcpInfo {
 #[derive(Serialize, Clone)]
 struct Uptime {
     time: String,
-    freq: u32,
+    freq: String,
 }
 
 impl From<&UptimeOutput> for Uptime {
@@ -45,7 +45,7 @@ impl From<&UptimeOutput> for Uptime {
                 "{} days, {} hrs, {} min (modulo {} days)",
                 output.days, output.hours, output.min, output.up_mod_days
             ),
-            freq: output.freq,
+            freq: format!("{:.2} Hz", output.freq as f64 / 100.0),
         }
     }
 }
