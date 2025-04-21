@@ -45,7 +45,7 @@ impl From<&UptimeOutput> for Uptime {
                 "{} days, {} hrs, {} min (modulo {} days)",
                 output.days, output.hours, output.min, output.up_mod_days
             ),
-            freq: format!("{:.2} Hz", output.freq as f64 / 100.0),
+            freq: format!("{:.2} Hz", output.freq),
         }
     }
 }
