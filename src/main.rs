@@ -104,6 +104,7 @@ impl From<&MTUOutput> for Mtu {
 #[derive(Serialize, Clone)]
 struct SynAckTCP {
     os: String,
+    quality: String,
     dist: String,
     sig: String,
 }
@@ -130,8 +131,9 @@ fn extract_dist_string(ttl: &Ttl) -> String {
 impl From<&SynTCPOutput> for SynAckTCP {
     fn from(output: &SynTCPOutput) -> Self {
         SynAckTCP {
-            os: extract_os_string(&output.label),
+            os: extract_os_string(&output.matched_label.as_ref().map(|l| &l.label).cloned()),
             dist: extract_dist_string(&output.sig.ittl),
+            quality: output.matched_label.as_ref().map(|l| l.quality.to_string()).unwrap_or_else(|| "0.00".to_string()),
             sig: output.sig.to_string(),
         }
     }
@@ -140,7 +142,8 @@ impl From<&SynTCPOutput> for SynAckTCP {
 impl From<&SynAckTCPOutput> for SynAckTCP {
     fn from(output: &SynAckTCPOutput) -> Self {
         SynAckTCP {
-            os: extract_os_string(&output.label),
+            os: extract_os_string(&output.matched_label.as_ref().map(|l| &l.label).cloned()),
+            quality: output.matched_label.as_ref().map(|l| l.quality.to_string()).unwrap_or_else(|| "0.00".to_string()),
             dist: extract_dist_string(&output.sig.ittl),
             sig: output.sig.to_string(),
         }
