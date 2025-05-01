@@ -55,6 +55,7 @@ struct HttpRequest {
     lang: Option<String>,
     diagnosis: String,
     label: Option<String>,
+    quality: String,
     sig: String,
 }
 
@@ -63,7 +64,12 @@ impl From<&HttpRequestOutput> for HttpRequest {
         HttpRequest {
             lang: output.lang.as_ref().map(|l| l.to_string()),
             diagnosis: output.diagnosis.to_string(),
-            label: output.label.as_ref().map(|l| l.to_string()),
+            label: output.matched_label.as_ref().map(|l| l.label.name.clone()),
+            quality: output
+                .matched_label
+                .as_ref()
+                .map(|l| l.quality.to_string())
+                .unwrap_or_else(|| "0.00".to_string()),
             sig: output.sig.to_string(),
         }
     }
@@ -73,6 +79,7 @@ impl From<&HttpRequestOutput> for HttpRequest {
 struct HttpResponse {
     diagnosis: String,
     label: Option<String>,
+    quality: String,
     sig: String,
 }
 
@@ -80,7 +87,12 @@ impl From<&HttpResponseOutput> for HttpResponse {
     fn from(output: &HttpResponseOutput) -> Self {
         HttpResponse {
             diagnosis: output.diagnosis.to_string(),
-            label: output.label.as_ref().map(|l| l.to_string()),
+            label: output.matched_label.as_ref().map(|l| l.label.name.clone()),
+            quality: output
+                .matched_label
+                .as_ref()
+                .map(|l| l.quality.to_string())
+                .unwrap_or_else(|| "0.00".to_string()),
             sig: output.sig.to_string(),
         }
     }
@@ -133,7 +145,11 @@ impl From<&SynTCPOutput> for SynAckTCP {
         SynAckTCP {
             os: extract_os_string(&output.matched_label.as_ref().map(|l| &l.label).cloned()),
             dist: extract_dist_string(&output.sig.ittl),
-            quality: output.matched_label.as_ref().map(|l| l.quality.to_string()).unwrap_or_else(|| "0.00".to_string()),
+            quality: output
+                .matched_label
+                .as_ref()
+                .map(|l| l.quality.to_string())
+                .unwrap_or_else(|| "0.00".to_string()),
             sig: output.sig.to_string(),
         }
     }
@@ -143,7 +159,11 @@ impl From<&SynAckTCPOutput> for SynAckTCP {
     fn from(output: &SynAckTCPOutput) -> Self {
         SynAckTCP {
             os: extract_os_string(&output.matched_label.as_ref().map(|l| &l.label).cloned()),
-            quality: output.matched_label.as_ref().map(|l| l.quality.to_string()).unwrap_or_else(|| "0.00".to_string()),
+            quality: output
+                .matched_label
+                .as_ref()
+                .map(|l| l.quality.to_string())
+                .unwrap_or_else(|| "0.00".to_string()),
             dist: extract_dist_string(&output.sig.ittl),
             sig: output.sig.to_string(),
         }
