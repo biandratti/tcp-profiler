@@ -30,6 +30,7 @@ struct TcpInfo {
     uptime: Option<Uptime>,
     http_request: Option<HttpRequest>,
     http_response: Option<HttpResponse>,
+    source_ip: Option<String>,
 }
 
 #[derive(Serialize, Clone)]
@@ -274,13 +275,14 @@ async fn main() {
 
             let mut cache = cache_clone.write().await;
 
-            let tcp_info = cache.entry(source_ip).or_insert_with(|| TcpInfo {
+            let tcp_info = cache.entry(source_ip.clone()).or_insert_with(|| TcpInfo {
                 syn: None,
                 syn_ack: None,
                 mtu: None,
                 uptime: None,
                 http_request: None,
                 http_response: None,
+                source_ip: None,
             });
 
             if let Some(syn) = &output.syn {
@@ -301,6 +303,7 @@ async fn main() {
             if let Some(http_res) = &output.http_response {
                 tcp_info.http_response = Some(HttpResponse::from(http_res));
             }
+            tcp_info.source_ip = Some(source_ip);
         }
     });
 
