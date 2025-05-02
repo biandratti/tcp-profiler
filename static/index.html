@@ -194,19 +194,10 @@
             <label for="x-remote-port">X-Remote-Port:</label>
             <input type="text" id="x-remote-port" placeholder="Enter port number">
         </div>
+        <button id="searchProfileBtn" onclick="searchProfile()">Search</button>
     </div>
-    <button class="scan-button" onclick="sendRequest()" title="Show Profile">
-        <svg class="scan-icon" viewBox="0 0 24 24">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
-            <path d="M8 8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 1.1-.45 2.1-1.17 2.83C14.1 11.55 13.1 12 12 12s-2.1-.45-2.83-1.17C8.45 10.1 8 9.1 8 8z"/>
-            <path d="M12 14c-2.21 0-4 1.79-4 4v2h8v-2c0-2.21-1.79-4-4-4z"/>
-            <path d="M10 18c0-1.1.9-2 2-2s2 .9 2 2H10z"/>
-            <path d="M8 12c-1.1 0-2 .9-2 2v2h4v-2c0-1.1-.9-2-2-2z"/>
-            <path d="M16 12c-1.1 0-2 .9-2 2v2h4v-2c0-1.1-.9-2-2-2z"/>
-        </svg>
-    </button>
     <div class="profile-container">
-        <h2>Profile</h2>
+        <div id="requestIp" style="margin-bottom: 10px; color: #0D47A1; font-weight: bold;"></div>
         <table class="profile-table">
             <tbody id="profileResponse"></tbody>
         </table>
@@ -219,6 +210,7 @@
         }
 
         function createTableRow(key, value) {
+            if (key === 'source_ip') return null;
             const row = document.createElement('tr');
             let valueContent = '';
             
@@ -241,10 +233,42 @@
             return row;
         }
 
-        async function sendRequest() {
+        async function fetchTcpInfoOnLoad() {
+            try {
+                const response = await fetch('/tcp-info', {
+                    method: 'GET'
+                });
+                const data = await response.json();
+                const profileResponse = document.getElementById('profileResponse');
+                profileResponse.innerHTML = '';
+                const requestIpDiv = document.getElementById('requestIp');
+                let ip = (data && data.source_ip) ? data.source_ip : '';
+                requestIpDiv.textContent = ip ? `Profile for IP: ${ip}` : '';
+                if (data && typeof data === 'object' && Object.keys(data).length > 0) {
+                    for (const [key, value] of Object.entries(data)) {
+                        const row = createTableRow(key, value);
+                        if (row) profileResponse.appendChild(row);
+                    }
+                } else {
+                    const errorRow = createTableRow(
+                        'No Data',
+                        'No TCP profile data available for your connection. Try scanning or refreshing the page.'
+                    );
+                    profileResponse.appendChild(errorRow);
+                }
+            } catch (error) {
+                const profileResponse = document.getElementById('profileResponse');
+                profileResponse.innerHTML = '';
+                const errorRow = createTableRow('Error', error.message);
+                profileResponse.appendChild(errorRow);
+                console.error('Error fetching TCP info:', error);
+            }
+        }
+
+        async function searchProfile() {
             const xForwardedFor = document.getElementById('x-forwarded-for').value;
             const xRemotePort = document.getElementById('x-remote-port').value;
-            
+
             const headers = {};
             if (xForwardedFor) {
                 headers['X-Forwarded-For'] = xForwardedFor;
@@ -252,29 +276,40 @@
             if (xRemotePort) {
                 headers['X-Remote-Port'] = xRemotePort;
             }
-            
+
             try {
                 const response = await fetch('/tcp-info', {
                     method: 'GET',
                     headers: headers
                 });
-                
                 const data = await response.json();
                 const profileResponse = document.getElementById('profileResponse');
                 profileResponse.innerHTML = '';
-                
-                // Create rows for each part of the response
-                for (const [key, value] of Object.entries(data)) {
-                    const row = createTableRow(key, value);
-                    profileResponse.appendChild(row);
+                const requestIpDiv = document.getElementById('requestIp');
+                let ip = (data && data.source_ip) ? data.source_ip : '';
+                requestIpDiv.textContent = ip ? `Profile for IP: ${ip}` : '';
+                if (data && typeof data === 'object' && Object.keys(data).length > 0) {
+                    for (const [key, value] of Object.entries(data)) {
+                        const row = createTableRow(key, value);
+                        if (row) profileResponse.appendChild(row);
+                    }
+                } else {
+                    const errorRow = createTableRow(
+                        'No Data',
+                        'No TCP profile data available for your connection. Try scanning or refreshing the page.'
+                    );
+                    profileResponse.appendChild(errorRow);
                 }
             } catch (error) {
                 const profileResponse = document.getElementById('profileResponse');
                 profileResponse.innerHTML = '';
                 const errorRow = createTableRow('Error', error.message);
                 profileResponse.appendChild(errorRow);
+                console.error('Error fetching TCP info:', error);
             }
         }
+
+        window.addEventListener('DOMContentLoaded', fetchTcpInfoOnLoad);
     </script>
 </body>
 </html>
