@@ -5,7 +5,7 @@ use log::{debug, error, info};
 use passivetcp_rs::p0f_output::{
     HttpRequestOutput, HttpResponseOutput, MTUOutput, SynAckTCPOutput, SynTCPOutput, UptimeOutput,
 };
-use passivetcp_rs::{db::Database, P0f};
+use passivetcp_rs::{db::Database, P0f, Ttl};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -35,7 +35,7 @@ struct TcpInfo {
 #[derive(Serialize, Clone)]
 struct Uptime {
     time: String,
-    freq: u32,
+    freq: String,
 }
 
 impl From<&UptimeOutput> for Uptime {
@@ -45,7 +45,7 @@ impl From<&UptimeOutput> for Uptime {
                 "{} days, {} hrs, {} min (modulo {} days)",
                 output.days, output.hours, output.min, output.up_mod_days
             ),
-            freq: output.freq,
+            freq: format!("{:.2} Hz", output.freq),
         }
     }
 }
@@ -55,6 +55,7 @@ struct HttpRequest {
     lang: Option<String>,
     diagnosis: String,
     label: Option<String>,
+    quality: String,
     sig: String,
 }
 
@@ -63,7 +64,12 @@ impl From<&HttpRequestOutput> for HttpRequest {
         HttpRequest {
             lang: output.lang.as_ref().map(|l| l.to_string()),
             diagnosis: output.diagnosis.to_string(),
-            label: output.label.as_ref().map(|l| l.to_string()),
+            label: output.matched_label.as_ref().map(|l| l.label.name.clone()),
+            quality: output
+                .matched_label
+                .as_ref()
+                .map(|l| l.quality.to_string())
+                .unwrap_or_else(|| "0.00".to_string()),
             sig: output.sig.to_string(),
         }
     }
@@ -73,6 +79,7 @@ impl From<&HttpRequestOutput> for HttpRequest {
 struct HttpResponse {
     diagnosis: String,
     label: Option<String>,
+    quality: String,
     sig: String,
 }
 
@@ -80,7 +87,12 @@ impl From<&HttpResponseOutput> for HttpResponse {
     fn from(output: &HttpResponseOutput) -> Self {
         HttpResponse {
             diagnosis: output.diagnosis.to_string(),
-            label: output.label.as_ref().map(|l| l.to_string()),
+            label: output.matched_label.as_ref().map(|l| l.label.name.clone()),
+            quality: output
+                .matched_label
+                .as_ref()
+                .map(|l| l.quality.to_string())
+                .unwrap_or_else(|| "0.00".to_string()),
             sig: output.sig.to_string(),
         }
     }
@@ -103,14 +115,41 @@ impl From<&MTUOutput> for Mtu {
 
 #[derive(Serialize, Clone)]
 struct SynAckTCP {
-    label: Option<String>,
+    os: String,
+    quality: String,
+    dist: String,
     sig: String,
+}
+
+fn extract_os_string(label: &Option<passivetcp_rs::db::Label>) -> String {
+    if let Some(label) = label {
+        if let Some(flavor) = &label.flavor {
+            format!("{} {}", label.name, flavor)
+        } else {
+            label.name.clone()
+        }
+    } else {
+        String::new()
+    }
+}
+
+fn extract_dist_string(ttl: &Ttl) -> String {
+    match ttl {
+        Ttl::Distance(_, hops) => hops.to_string(),
+        _ => String::new(),
+    }
 }
 
 impl From<&SynTCPOutput> for SynAckTCP {
     fn from(output: &SynTCPOutput) -> Self {
         SynAckTCP {
-            label: output.label.as_ref().map(|l| l.to_string()),
+            os: extract_os_string(&output.matched_label.as_ref().map(|l| &l.label).cloned()),
+            dist: extract_dist_string(&output.sig.ittl),
+            quality: output
+                .matched_label
+                .as_ref()
+                .map(|l| l.quality.to_string())
+                .unwrap_or_else(|| "0.00".to_string()),
             sig: output.sig.to_string(),
         }
     }
@@ -119,7 +158,13 @@ impl From<&SynTCPOutput> for SynAckTCP {
 impl From<&SynAckTCPOutput> for SynAckTCP {
     fn from(output: &SynAckTCPOutput) -> Self {
         SynAckTCP {
-            label: output.label.as_ref().map(|l| l.to_string()),
+            os: extract_os_string(&output.matched_label.as_ref().map(|l| &l.label).cloned()),
+            quality: output
+                .matched_label
+                .as_ref()
+                .map(|l| l.quality.to_string())
+                .unwrap_or_else(|| "0.00".to_string()),
+            dist: extract_dist_string(&output.sig.ittl),
             sig: output.sig.to_string(),
         }
     }
