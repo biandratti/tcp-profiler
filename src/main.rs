@@ -3,7 +3,8 @@ use axum::{extract::ConnectInfo, response::Json, routing::get, Router};
 use clap::Parser;
 use log::{debug, error, info};
 use passivetcp_rs::p0f_output::{
-    HttpRequestOutput, HttpResponseOutput, MTUOutput, SynAckTCPOutput, SynTCPOutput, UptimeOutput,
+    Browser, HttpRequestOutput, HttpResponseOutput, MTUOutput, OperativeSystem, SynAckTCPOutput,
+    SynTCPOutput, UptimeOutput, WebServer,
 };
 use passivetcp_rs::{db::Database, P0f, Ttl};
 use serde::Serialize;
@@ -55,9 +56,24 @@ impl From<&UptimeOutput> for Uptime {
 struct HttpRequest {
     lang: Option<String>,
     diagnosis: String,
-    label: Option<String>,
+    browser: String,
     quality: String,
     sig: String,
+}
+
+fn extract_browser(browser: Option<&Browser>) -> String {
+    if let Some(b) = browser {
+        let mut parts = vec![b.name.clone()];
+        if let Some(family) = &b.family {
+            parts.push(family.clone());
+        }
+        if let Some(variant) = &b.variant {
+            parts.push(variant.clone());
+        }
+        parts.join(" ")
+    } else {
+        String::new()
+    }
 }
 
 impl From<&HttpRequestOutput> for HttpRequest {
@@ -65,9 +81,9 @@ impl From<&HttpRequestOutput> for HttpRequest {
         HttpRequest {
             lang: output.lang.as_ref().map(|l| l.to_string()),
             diagnosis: output.diagnosis.to_string(),
-            label: output.matched_label.as_ref().map(|l| l.label.name.clone()),
+            browser: extract_browser(output.browser_matched.as_ref().map(|l| &l.browser)),
             quality: output
-                .matched_label
+                .browser_matched
                 .as_ref()
                 .map(|l| l.quality.to_string())
                 .unwrap_or_else(|| "0.00".to_string()),
@@ -79,18 +95,35 @@ impl From<&HttpRequestOutput> for HttpRequest {
 #[derive(Serialize, Clone)]
 struct HttpResponse {
     diagnosis: String,
-    label: Option<String>,
+    web_server: String,
     quality: String,
     sig: String,
+}
+
+fn extract_web_server(web_server: Option<&WebServer>) -> String {
+    if let Some(ws) = web_server {
+        let mut parts = vec![ws.name.clone()];
+        if let Some(family) = &ws.family {
+            parts.push(family.clone());
+        }
+        if let Some(variant) = &ws.variant {
+            parts.push(variant.clone());
+        }
+        parts.join(" ")
+    } else {
+        String::new()
+    }
 }
 
 impl From<&HttpResponseOutput> for HttpResponse {
     fn from(output: &HttpResponseOutput) -> Self {
         HttpResponse {
             diagnosis: output.diagnosis.to_string(),
-            label: output.matched_label.as_ref().map(|l| l.label.name.clone()),
+            web_server: extract_web_server(
+                output.web_server_matched.as_ref().map(|l| &l.web_server),
+            ),
             quality: output
-                .matched_label
+                .web_server_matched
                 .as_ref()
                 .map(|l| l.quality.to_string())
                 .unwrap_or_else(|| "0.00".to_string()),
@@ -122,13 +155,16 @@ struct SynAckTCP {
     sig: String,
 }
 
-fn extract_os_string(label: &Option<passivetcp_rs::db::Label>) -> String {
-    if let Some(label) = label {
-        if let Some(flavor) = &label.flavor {
-            format!("{} {}", label.name, flavor)
-        } else {
-            label.name.clone()
+fn extract_os(operative_system: Option<&OperativeSystem>) -> String {
+    if let Some(os) = operative_system {
+        let mut parts = vec![os.name.clone()];
+        if let Some(family) = &os.family {
+            parts.push(family.clone());
         }
+        if let Some(variant) = &os.variant {
+            parts.push(variant.clone());
+        }
+        parts.join(" ")
     } else {
         String::new()
     }
@@ -144,10 +180,10 @@ fn extract_dist_string(ttl: &Ttl) -> String {
 impl From<&SynTCPOutput> for SynAckTCP {
     fn from(output: &SynTCPOutput) -> Self {
         SynAckTCP {
-            os: extract_os_string(&output.matched_label.as_ref().map(|l| &l.label).cloned()),
+            os: extract_os(output.os_matched.as_ref().map(|l| &l.os)),
             dist: extract_dist_string(&output.sig.ittl),
             quality: output
-                .matched_label
+                .os_matched
                 .as_ref()
                 .map(|l| l.quality.to_string())
                 .unwrap_or_else(|| "0.00".to_string()),
@@ -159,9 +195,9 @@ impl From<&SynTCPOutput> for SynAckTCP {
 impl From<&SynAckTCPOutput> for SynAckTCP {
     fn from(output: &SynAckTCPOutput) -> Self {
         SynAckTCP {
-            os: extract_os_string(&output.matched_label.as_ref().map(|l| &l.label).cloned()),
+            os: extract_os(output.os_matched.as_ref().map(|l| &l.os)),
             quality: output
-                .matched_label
+                .os_matched
                 .as_ref()
                 .map(|l| l.quality.to_string())
                 .unwrap_or_else(|| "0.00".to_string()),
