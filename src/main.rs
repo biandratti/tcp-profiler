@@ -1,7 +1,6 @@
 use axum::http::HeaderMap;
 use axum::{extract::ConnectInfo, response::Json, routing::get, Router};
 use clap::Parser;
-use log::{debug, error, info};
 use passivetcp_rs::p0f_output::{
     Browser, HttpRequestOutput, HttpResponseOutput, MTUOutput, OperativeSystem, SynAckTCPOutput,
     SynTCPOutput, UptimeOutput, WebServer,
@@ -15,6 +14,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
 use tower_http::services::fs::ServeDir;
+use tracing::{debug, error, info};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -249,7 +249,7 @@ async fn get_tcp_info(
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
+    tracing_subscriber::fmt::init();
 
     let args = Args::parse();
 
