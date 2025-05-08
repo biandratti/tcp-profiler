@@ -57,12 +57,21 @@ impl From<&UptimeOutput> for Uptime {
 }
 
 #[derive(Serialize, Clone)]
+pub struct HttpSignature {
+    pub version: String,
+    pub horder: String,
+    pub habsent: String,
+    pub expsw: String,
+}
+
+#[derive(Serialize, Clone)]
 struct HttpRequest {
     lang: Option<String>,
     diagnosis: String,
     browser: String,
     quality: String,
-    sig: String,
+    signature: String,
+    detail: HttpSignature,
 }
 
 fn extract_browser(browser: Option<&Browser>) -> String {
@@ -82,6 +91,31 @@ fn extract_browser(browser: Option<&Browser>) -> String {
 
 impl From<&HttpRequestOutput> for HttpRequest {
     fn from(output: &HttpRequestOutput) -> Self {
+        let horder_str = output
+            .sig
+            .horder
+            .iter()
+            .map(|h| h.to_string())
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        let habsent_str = output
+            .sig
+            .habsent
+            .iter()
+            .map(|h| h.to_string())
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        let expsw_str = output.sig.expsw.clone();
+
+        let http_signature_detail = HttpSignature {
+            version: output.sig.version.to_string(),
+            horder: horder_str,
+            habsent: habsent_str,
+            expsw: expsw_str,
+        };
+
         HttpRequest {
             lang: output.lang.as_ref().map(|l| l.to_string()),
             diagnosis: output.diagnosis.to_string(),
@@ -91,7 +125,8 @@ impl From<&HttpRequestOutput> for HttpRequest {
                 .as_ref()
                 .map(|l| l.quality.to_string())
                 .unwrap_or_else(|| "0.00".to_string()),
-            sig: output.sig.to_string(),
+            signature: output.sig.to_string(),
+            detail: http_signature_detail,
         }
     }
 }
