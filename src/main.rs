@@ -5,7 +5,11 @@ use passivetcp_rs::p0f_output::{
     Browser, HttpRequestOutput, HttpResponseOutput, MTUOutput, OperativeSystem, SynAckTCPOutput,
     SynTCPOutput, UptimeOutput, WebServer,
 };
-use passivetcp_rs::{db::Database, P0f, Ttl};
+use passivetcp_rs::{
+    db::Database,
+    tcp::{IpVersion, PayloadSize, Signature as PassiveTcpSignature, WindowSize},
+    P0f, Ttl,
+};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -148,11 +152,70 @@ impl From<&MTUOutput> for Mtu {
 }
 
 #[derive(Serialize, Clone)]
+pub struct TcpSignature {
+    pub version: String,
+    pub ittl: String,
+    pub olen: u8,
+    pub mss: Option<u16>,
+    pub wsize: String,
+    pub wscale: Option<u8>,
+    pub olayout: String,
+    pub quirks: String,
+    pub pclass: String,
+}
+
+impl From<&PassiveTcpSignature> for TcpSignature {
+    fn from(sig: &PassiveTcpSignature) -> Self {
+        TcpSignature {
+            version: match sig.version {
+                IpVersion::V4 => "IPv4".to_string(),
+                IpVersion::V6 => "IPv6".to_string(),
+                IpVersion::Any => "Unknown IP Version".to_string(),
+            },
+            ittl: match sig.ittl {
+                Ttl::Distance(_, hops) => format!("Distance*{}", hops),
+                Ttl::Value(value) => format!("Value*{}", value),
+                Ttl::Bad(value) => format!("Bad*{}", value),
+                Ttl::Guess(value) => format!("Guess*{}", value),
+            },
+            olen: sig.olen,
+            mss: sig.mss,
+            wsize: match sig.wsize {
+                WindowSize::Mod(val) => format!("MOD*{}", val),
+                WindowSize::Mss(val) => format!("MSS*{}", val),
+                WindowSize::Mtu(val) => format!("MTU*{}", val),
+                WindowSize::Value(val) => format!("Value*{}", val),
+                WindowSize::Any => "Any".to_string(),
+            },
+            wscale: sig.wscale,
+            olayout: sig
+                .olayout
+                .iter()
+                .map(|opt| format!("{:?}", opt))
+                .collect::<Vec<String>>()
+                .join(","),
+            quirks: sig
+                .quirks
+                .iter()
+                .map(|quirk| format!("{:?}", quirk))
+                .collect::<Vec<String>>()
+                .join(","),
+            pclass: match sig.pclass {
+                PayloadSize::Zero => "0".to_string(),
+                PayloadSize::NonZero => "+".to_string(),
+                PayloadSize::Any => "*".to_string(),
+            },
+        }
+    }
+}
+
+#[derive(Serialize, Clone)]
 struct SynAckTCP {
     os: String,
     quality: String,
     dist: String,
-    sig: String,
+    signature: String,
+    detail: TcpSignature,
 }
 
 fn extract_os(operative_system: Option<&OperativeSystem>) -> String {
@@ -173,7 +236,7 @@ fn extract_os(operative_system: Option<&OperativeSystem>) -> String {
 fn extract_dist_string(ttl: &Ttl) -> String {
     match ttl {
         Ttl::Distance(_, hops) => hops.to_string(),
-        _ => String::new(),
+        _ => "0".to_string(),
     }
 }
 
@@ -187,7 +250,8 @@ impl From<&SynTCPOutput> for SynAckTCP {
                 .as_ref()
                 .map(|l| l.quality.to_string())
                 .unwrap_or_else(|| "0.00".to_string()),
-            sig: output.sig.to_string(),
+            signature: output.sig.to_string(),
+            detail: TcpSignature::from(&output.sig),
         }
     }
 }
@@ -202,7 +266,8 @@ impl From<&SynAckTCPOutput> for SynAckTCP {
                 .map(|l| l.quality.to_string())
                 .unwrap_or_else(|| "0.00".to_string()),
             dist: extract_dist_string(&output.sig.ittl),
-            sig: output.sig.to_string(),
+            signature: output.sig.to_string(),
+            detail: TcpSignature::from(&output.sig),
         }
     }
 }

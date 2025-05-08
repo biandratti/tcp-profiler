@@ -216,7 +216,16 @@
             
             if (typeof value === 'object' && value !== null) {
                 valueContent = Object.entries(value)
-                    .map(([k, v]) => `<span style="color: #0D47A1; font-weight: bold;">"${k}"</span>: ${JSON.stringify(v)}`)
+                    .map(([k, v]) => { 
+                        if (k === 'detail' && typeof v === 'object' && v !== null) {
+                            const signatureDetails = Object.entries(v)
+                                .map(([sigKey, sigValue]) => `&nbsp;&nbsp;&nbsp;&nbsp;<span style="font-weight: bold; color: #3F51B5;">${sigKey}</span>: ${JSON.stringify(sigValue)}`)
+                                .join('<br>');
+                            return `<span style="color: #0D47A1; font-weight: bold;">"${k}"</span>:<br>${signatureDetails}`;
+                        } else {
+                            return `<span style="color: #0D47A1; font-weight: bold;">"${k}"</span>: ${JSON.stringify(v)}`;
+                        }
+                    })
                     .join('<br>');
             } else {
                 valueContent = JSON.stringify(value);
