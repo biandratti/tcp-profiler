@@ -38,4 +38,4 @@ docker run --network host tcp-profiler ./tcp-profiler --interface <interface>
 ```
 
 ### UI output
-![img.png](img.png)
+![img.png](example.png)
