@@ -23,6 +23,10 @@ cargo build --release
 ```
 sudo RUST_LOG=info ./target/release/tcp-profiler --interface <interface>
 ```
+or debugging passivetcp_rs
+```
+sudo RUST_LOG=passivetcp_rs=debug ./target/release/tcp-profiler --interface <interface>
+```
 
 
 ### Build and run docker image
@@ -34,4 +38,4 @@ docker run --network host tcp-profiler ./tcp-profiler --interface <interface>
 ```
 
 ### UI output
-![img.png](img.png)
+![img.png](example.png)
