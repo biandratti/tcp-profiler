@@ -7,7 +7,7 @@ use passivetcp_rs::p0f_output::{
 };
 use passivetcp_rs::{
     db::Database,
-    tcp::{IpVersion, PayloadSize, Signature as PassiveTcpSignature, WindowSize},
+    tcp::{IpVersion, PayloadSize, Signature as PassiveTcpSignature},
     P0f, Ttl,
 };
 use serde::Serialize;
@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::mpsc as std_mpsc;
 use std::sync::Arc;
+use passivetcp_rs::tcp::WindowSizeType;
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
 use tower_http::services::fs::ServeDir;
@@ -197,10 +198,25 @@ pub struct TcpSignature {
     pub olayout: String,
     pub quirks: String,
     pub pclass: String,
+    pub flags: String,
+    pub ip_id: String,
+    pub tsval: String,
+    pub tsecr: String,
+    pub ip_total_length: String,
+    pub tcp_header_len_words: String,
 }
 
 impl From<&PassiveTcpSignature> for TcpSignature {
     fn from(sig: &PassiveTcpSignature) -> Self {
+        let (tsval_str, tsecr_str) = if let Some(timestamp) = &sig.timestamp {
+            (
+                timestamp.tsval.map_or_else(|| "N/A".to_string(), |v| v.to_string()),
+                timestamp.tsecr.map_or_else(|| "N/A".to_string(), |v| v.to_string()),
+            )
+        } else {
+            ("N/A".to_string(), "N/A".to_string())
+        };
+
         TcpSignature {
             version: match sig.version {
                 IpVersion::V4 => "IPv4".to_string(),
@@ -215,12 +231,12 @@ impl From<&PassiveTcpSignature> for TcpSignature {
             },
             olen: sig.olen,
             mss: sig.mss,
-            wsize: match sig.wsize {
-                WindowSize::Mod(val) => format!("MOD*{}", val),
-                WindowSize::Mss(val) => format!("MSS*{}", val),
-                WindowSize::Mtu(val) => format!("MTU*{}", val),
-                WindowSize::Value(val) => format!("Value*{}", val),
-                WindowSize::Any => "Any".to_string(),
+            wsize: match sig.wsize.ty {
+                WindowSizeType::Mod(val) => format!("MOD*{}", val),
+                WindowSizeType::Mss(val) => format!("MSS*{}", val),
+                WindowSizeType::Mtu(val) => format!("MTU*{}", val),
+                WindowSizeType::Value(val) => format!("Value*{}", val),
+                WindowSizeType::Any => "Any".to_string(),
             },
             wscale: sig.wscale,
             olayout: sig
@@ -240,6 +256,12 @@ impl From<&PassiveTcpSignature> for TcpSignature {
                 PayloadSize::NonZero => "+".to_string(),
                 PayloadSize::Any => "*".to_string(),
             },
+            flags: sig.tcp_raw_flags.map_or_else(|| "N/A".to_string(), |f| f.to_string()),
+            ip_id: sig.ip_id.map_or_else(|| "N/A".to_string(), |id| id.to_string()),
+            tsval: tsval_str,
+            tsecr: tsecr_str,
+            ip_total_length: sig.ip_total_length.map_or_else(|| "N/A".to_string(), |len| len.to_string()),
+            tcp_header_len_words: sig.tcp_header_len_words.map_or_else(|| "N/A".to_string(), |len| len.to_string()),
         }
     }
 }
