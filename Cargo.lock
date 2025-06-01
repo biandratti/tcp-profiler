@@ -604,9 +604,9 @@ dependencies = [
 
 [[package]]
 name = "passivetcp-rs"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f23b6e9a84618c8dce4dbe3af6557f124590dd4b2e37610385722f16b243fec"
+checksum = "03ab5ac40825342fa5cfb5e0b60df9b3c35d8f94adc1cb44afb23210edd728dd"
 dependencies = [
  "crossbeam",
  "httparse",
