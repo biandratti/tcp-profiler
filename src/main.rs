@@ -7,8 +7,8 @@ use passivetcp_rs::p0f_output::{
 };
 use passivetcp_rs::{
     db::Database,
-    tcp::{IpVersion, PayloadSize, Signature as PassiveTcpSignature, WindowSize},
-    P0f, Ttl,
+    tcp::{IpVersion, PayloadSize, WindowSize},
+    ObservableTcp, P0f, Ttl,
 };
 use serde::Serialize;
 use std::collections::HashMap;
@@ -199,8 +199,8 @@ pub struct TcpSignature {
     pub pclass: String,
 }
 
-impl From<&PassiveTcpSignature> for TcpSignature {
-    fn from(sig: &PassiveTcpSignature) -> Self {
+impl From<&ObservableTcp> for TcpSignature {
+    fn from(sig: &ObservableTcp) -> Self {
         TcpSignature {
             version: match sig.version {
                 IpVersion::V4 => "IPv4".to_string(),
