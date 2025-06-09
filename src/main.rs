@@ -1,14 +1,14 @@
 use axum::http::HeaderMap;
 use axum::{extract::ConnectInfo, response::Json, routing::get, Router};
 use clap::Parser;
-use passivetcp_rs::p0f_output::{
+use passivetcp_rs::fingerprint_result::{
     Browser, HttpRequestOutput, HttpResponseOutput, MTUOutput, OperativeSystem, SynAckTCPOutput,
     SynTCPOutput, UptimeOutput, WebServer,
 };
 use passivetcp_rs::{
     db::Database,
     tcp::{IpVersion, PayloadSize, WindowSize},
-    ObservableTcp, P0f, Ttl,
+    ObservableTcp, PassiveTcp, Ttl,
 };
 use serde::Serialize;
 use std::collections::HashMap;
@@ -310,7 +310,7 @@ impl From<&SynAckTCPOutput> for SynAckTCP {
 type Cache = Arc<RwLock<HashMap<String, TcpInfo>>>;
 
 struct AppState {
-    _sender: mpsc::Sender<passivetcp_rs::p0f_output::P0fOutput>,
+    _sender: mpsc::Sender<passivetcp_rs::fingerprint_result::FingerprintResult>,
     cache: Cache,
 }
 
@@ -355,18 +355,18 @@ async fn main() {
 
     let db = Box::leak(Box::new(Database::default()));
     let (async_sender, mut async_receiver) =
-        mpsc::channel::<passivetcp_rs::p0f_output::P0fOutput>(100);
+        mpsc::channel::<passivetcp_rs::fingerprint_result::FingerprintResult>(100);
     let (std_sender, std_receiver) = std_mpsc::channel();
 
     let cache: Cache = Arc::new(RwLock::new(HashMap::new()));
 
-    // Start the P0f analyzer in a separate thread
+    // Start the Passive TCP analyzer in a separate thread
     let interface = args.interface.clone();
     let db_clone = db;
-    info!("Starting P0f analyzer on interface: {}", interface);
+    info!("Starting Passive TCP analyzer on interface: {}", interface);
     std::thread::spawn(move || {
-        debug!("P0f analyzer thread started");
-        P0f::new(db_clone, 100).analyze_network(&interface, std_sender);
+        debug!("Passive TCP analyzer thread started");
+        let _ = PassiveTcp::new(db_clone, 100).analyze_network(&interface, std_sender);
     });
 
     // Bridge between std channel and async channel
@@ -405,7 +405,7 @@ async fn main() {
             };
 
             info!(
-                "P0f detected packet from: {} and port: {}",
+                "Passive TCP detected packet from: {} and port: {}",
                 source_ip, source_port
             );
 
