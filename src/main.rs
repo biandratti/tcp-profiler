@@ -2,12 +2,13 @@ use axum::http::HeaderMap;
 use axum::{extract::ConnectInfo, response::Json, routing::get, Router};
 use clap::Parser;
 use passivetcp_rs::fingerprint_result::{
-    Browser, HttpRequestOutput, HttpResponseOutput, MTUOutput, OperativeSystem, SynAckTCPOutput, SynTCPOutput, TlsClientOutput, UptimeOutput, WebServer
+    Browser, HttpRequestOutput, HttpResponseOutput, MTUOutput, OperativeSystem, SynAckTCPOutput,
+    SynTCPOutput, TlsClientOutput, UptimeOutput, WebServer,
 };
 use passivetcp_rs::{
     db::Database,
     tcp::{IpVersion, PayloadSize, WindowSize},
-    ObservableTcp, PassiveTcp, Ttl, ObservableTlsClient,
+    ObservableTcp, ObservableTlsClient, PassiveTcp, Ttl,
 };
 use serde::Serialize;
 use std::collections::HashMap;
@@ -141,6 +142,13 @@ struct HttpResponse {
 
 #[derive(Serialize, Clone)]
 pub struct TlsClientObserved {
+    pub version: String,
+    pub sni: Option<String>,
+    pub alpn: Option<String>,
+    pub cipher_suites: Vec<u16>,
+    pub extensions: Vec<u16>,
+    pub signature_algorithms: Vec<u16>,
+    pub elliptic_curves: Vec<u16>,
 }
 
 #[derive(Serialize, Clone)]
@@ -154,9 +162,10 @@ struct TlsClient {
 
 impl From<&TlsClientOutput> for TlsClient {
     fn from(output: &TlsClientOutput) -> Self {
-        TlsClient { ja4: output.sig.ja4.full.value().to_string(),   
-            ja4_raw: output.sig.ja4.raw.value().to_string(), 
-            ja4_original: output.sig.ja4_original.full.value().to_string(), 
+        TlsClient {
+            ja4: output.sig.ja4.full.value().to_string(),
+            ja4_raw: output.sig.ja4.raw.value().to_string(),
+            ja4_original: output.sig.ja4_original.full.value().to_string(),
             ja4_original_raw: output.sig.ja4_original.raw.value().to_string(),
             observed: TlsClientObserved::from(&output.sig),
         }
@@ -165,7 +174,15 @@ impl From<&TlsClientOutput> for TlsClient {
 
 impl From<&ObservableTlsClient> for TlsClientObserved {
     fn from(value: &ObservableTlsClient) -> Self {
-        todo!()
+        TlsClientObserved {
+            version: value.version.to_string(),
+            sni: value.sni.as_ref().map(|l| l.to_string()),
+            alpn: value.alpn.as_ref().map(|l| l.to_string()),
+            cipher_suites: value.cipher_suites.clone(),
+            extensions: value.extensions.clone(),
+            signature_algorithms: value.signature_algorithms.clone(),
+            elliptic_curves: value.elliptic_curves.clone(),
+        }
     }
 }
 
@@ -280,7 +297,7 @@ struct SynAckTCP {
     quality: String,
     dist: String,
     signature: String,
-    observable: TcpObserved,
+    observed: TcpObserved,
 }
 
 fn extract_os(operative_system: Option<&OperativeSystem>) -> String {
@@ -316,7 +333,7 @@ impl From<&SynTCPOutput> for SynAckTCP {
                 .map(|l| l.quality.to_string())
                 .unwrap_or_else(|| "0.00".to_string()),
             signature: output.sig.to_string(),
-            observable: TcpObserved::from(&output.sig),
+            observed: TcpObserved::from(&output.sig),
         }
     }
 }
@@ -332,7 +349,7 @@ impl From<&SynAckTCPOutput> for SynAckTCP {
                 .unwrap_or_else(|| "0.00".to_string()),
             dist: extract_dist_string(&output.sig.ittl),
             signature: output.sig.to_string(),
-            observable: TcpObserved::from(&output.sig),
+            observed: TcpObserved::from(&output.sig),
         }
     }
 }

@@ -217,11 +217,11 @@
             if (typeof value === 'object' && value !== null) {
                 valueContent = Object.entries(value)
                     .map(([k, v]) => { 
-                        if (k === 'detail' && typeof v === 'object' && v !== null) {
-                            const signatureDetails = Object.entries(v)
+                        if (k === 'observed' && typeof v === 'object' && v !== null) {
+                            const signatureObserved = Object.entries(v)
                                 .map(([sigKey, sigValue]) => `&nbsp;&nbsp;&nbsp;&nbsp;<span style="font-weight: bold; color: #3F51B5;">${sigKey}</span>: ${JSON.stringify(sigValue)}`)
                                 .join('<br>');
-                            return `<span style="color: #0D47A1; font-weight: bold;">"${k}"</span>:<br>${signatureDetails}`;
+                            return `<span style="color: #0D47A1; font-weight: bold;">"${k}"</span>:<br>${signatureObserved}`;
                         } else {
                             return `<span style="color: #0D47A1; font-weight: bold;">"${k}"</span>: ${JSON.stringify(v)}`;
                         }
@@ -231,7 +231,7 @@
                 valueContent = JSON.stringify(value);
             }
             
-            const isHighlighted = ['syn', 'syn_ack', 'uptime', 'mtu', 'http_request', 'http_response'].includes(key);
+            const isHighlighted = ['syn', 'syn_ack', 'uptime', 'mtu', 'http_request', 'http_response', 'tls_client'].includes(key);
             const propertyClass = isHighlighted ? 'highlighted-property' : '';
             const valueClass = isHighlighted ? 'highlighted-value' : '';
             
