@@ -1,5 +1,6 @@
 use axum::http::HeaderMap;
 use axum::{extract::ConnectInfo, response::Json, routing::get, Router};
+use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use passivetcp_rs::fingerprint_result::{
     Browser, HttpRequestOutput, HttpResponseOutput, MTUOutput, OperativeSystem, SynAckTCPOutput,
@@ -25,6 +26,15 @@ use tracing::{debug, error, info};
 struct Args {
     #[arg(short = 'i', long)]
     interface: String,
+
+    #[arg(long, default_value = "true")]
+    https: bool,
+
+    #[arg(long, default_value = "../certs/cert.pem")]
+    cert_path: String,
+
+    #[arg(long, default_value = "../certs/key.pem")]
+    key_path: String,
 }
 
 #[derive(Serialize, Clone)]
@@ -512,14 +522,34 @@ async fn main() {
         .fallback_service(ServeDir::new("static"));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-    info!("Server running on http://{}", addr);
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    if args.https {
+        info!("Server running on https://{}", addr);
 
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await
-    .unwrap();
+        // Configure TLS
+        let config = RustlsConfig::from_pem_file(&args.cert_path, &args.key_path)
+            .await
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Failed to load TLS certificates from {} and {}",
+                    args.cert_path, args.key_path
+                )
+            });
+
+        axum_server::bind_rustls(addr, config)
+            .serve(app.into_make_service_with_connect_info::<SocketAddr>())
+            .await
+            .unwrap();
+    } else {
+        info!("Server running on http://{}", addr);
+
+        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
+    }
 }

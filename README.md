@@ -39,3 +39,10 @@ docker run --network host tcp-profiler ./tcp-profiler --interface <interface>
 
 ### UI output
 ![img.png](example.png)
+
+# Create certificates for local testing proposal
+```
+openssl genrsa -out certs/key.pem 2048
+
+openssl req -new -x509 -key certs/key.pem -out certs/cert.pem -days 365 -subj "/C=US/ST=Test/L=Test/O=TCP-Profiler-Demo/CN=localhost" -addext "subjectAltName=DNS:localhost,DNS:127.0.0.1,IP:127.0.0.1,IP:::1"
+```
