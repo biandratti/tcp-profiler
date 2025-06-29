@@ -1,5 +1,10 @@
-target/
+# Exclude unnecessary files
 .git/
-.gitignore
-Dockerfile
-.dockerignore
+.idea/
+target/debug/
+target/deps/
+target/.rustc_info.json
+target/CACHEDIR.TAG
+**/*.tmp
+**/*.log
+docker/

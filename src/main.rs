@@ -1,14 +1,15 @@
 use axum::http::HeaderMap;
 use axum::{extract::ConnectInfo, response::Json, routing::get, Router};
+use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use passivetcp_rs::fingerprint_result::{
     Browser, HttpRequestOutput, HttpResponseOutput, MTUOutput, OperativeSystem, SynAckTCPOutput,
-    SynTCPOutput, UptimeOutput, WebServer,
+    SynTCPOutput, TlsClientOutput, UptimeOutput, WebServer,
 };
 use passivetcp_rs::{
     db::Database,
     tcp::{IpVersion, PayloadSize, WindowSize},
-    ObservableTcp, PassiveTcp, Ttl,
+    ObservableTcp, ObservableTlsClient, PassiveTcp, Ttl,
 };
 use serde::Serialize;
 use std::collections::HashMap;
@@ -25,6 +26,15 @@ use tracing::{debug, error, info};
 struct Args {
     #[arg(short = 'i', long)]
     interface: String,
+
+    #[arg(long, default_value = "false")]
+    https: bool,
+
+        #[arg(long, default_value = "certs/cert.pem")]
+    cert_path: String,
+    
+    #[arg(long, default_value = "certs/key.pem")]
+    key_path: String,
 }
 
 #[derive(Serialize, Clone)]
@@ -35,6 +45,7 @@ struct TcpInfo {
     uptime: Option<Uptime>,
     http_request: Option<HttpRequest>,
     http_response: Option<HttpResponse>,
+    tls_client: Option<TlsClient>,
     source_ip: Option<String>,
 }
 
@@ -57,7 +68,7 @@ impl From<&UptimeOutput> for Uptime {
 }
 
 #[derive(Serialize, Clone)]
-pub struct HttpSignature {
+pub struct HttpObserved {
     pub version: String,
     pub horder: String,
     pub habsent: String,
@@ -71,7 +82,7 @@ struct HttpRequest {
     browser: String,
     quality: String,
     signature: String,
-    detail: HttpSignature,
+    observed: HttpObserved,
 }
 
 fn extract_browser(browser: Option<&Browser>) -> String {
@@ -109,7 +120,7 @@ impl From<&HttpRequestOutput> for HttpRequest {
 
         let expsw_str = output.sig.expsw.clone();
 
-        let http_signature_detail = HttpSignature {
+        let http_signature_observable = HttpObserved {
             version: output.sig.version.to_string(),
             horder: horder_str,
             habsent: habsent_str,
@@ -126,7 +137,7 @@ impl From<&HttpRequestOutput> for HttpRequest {
                 .map(|l| l.quality.to_string())
                 .unwrap_or_else(|| "0.00".to_string()),
             signature: output.sig.to_string(),
-            detail: http_signature_detail,
+            observed: http_signature_observable,
         }
     }
 }
@@ -136,7 +147,53 @@ struct HttpResponse {
     diagnosis: String,
     web_server: String,
     quality: String,
-    sig: String,
+    signature: String,
+}
+
+#[derive(Serialize, Clone)]
+pub struct TlsClientObserved {
+    pub version: String,
+    pub sni: Option<String>,
+    pub alpn: Option<String>,
+    pub cipher_suites: Vec<u16>,
+    pub extensions: Vec<u16>,
+    pub signature_algorithms: Vec<u16>,
+    pub elliptic_curves: Vec<u16>,
+}
+
+#[derive(Serialize, Clone)]
+struct TlsClient {
+    ja4: String,
+    ja4_raw: String,
+    ja4_original: String,
+    ja4_original_raw: String,
+    observed: TlsClientObserved,
+}
+
+impl From<&TlsClientOutput> for TlsClient {
+    fn from(output: &TlsClientOutput) -> Self {
+        TlsClient {
+            ja4: output.sig.ja4.full.value().to_string(),
+            ja4_raw: output.sig.ja4.raw.value().to_string(),
+            ja4_original: output.sig.ja4_original.full.value().to_string(),
+            ja4_original_raw: output.sig.ja4_original.raw.value().to_string(),
+            observed: TlsClientObserved::from(&output.sig),
+        }
+    }
+}
+
+impl From<&ObservableTlsClient> for TlsClientObserved {
+    fn from(value: &ObservableTlsClient) -> Self {
+        TlsClientObserved {
+            version: value.version.to_string(),
+            sni: value.sni.as_ref().map(|l| l.to_string()),
+            alpn: value.alpn.as_ref().map(|l| l.to_string()),
+            cipher_suites: value.cipher_suites.clone(),
+            extensions: value.extensions.clone(),
+            signature_algorithms: value.signature_algorithms.clone(),
+            elliptic_curves: value.elliptic_curves.clone(),
+        }
+    }
 }
 
 fn extract_web_server(web_server: Option<&WebServer>) -> String {
@@ -166,7 +223,7 @@ impl From<&HttpResponseOutput> for HttpResponse {
                 .as_ref()
                 .map(|l| l.quality.to_string())
                 .unwrap_or_else(|| "0.00".to_string()),
-            sig: output.sig.to_string(),
+            signature: output.sig.to_string(),
         }
     }
 }
@@ -187,7 +244,7 @@ impl From<&MTUOutput> for Mtu {
 }
 
 #[derive(Serialize, Clone)]
-pub struct TcpSignature {
+pub struct TcpObserved {
     pub version: String,
     pub ittl: String,
     pub olen: u8,
@@ -199,9 +256,9 @@ pub struct TcpSignature {
     pub pclass: String,
 }
 
-impl From<&ObservableTcp> for TcpSignature {
+impl From<&ObservableTcp> for TcpObserved {
     fn from(sig: &ObservableTcp) -> Self {
-        TcpSignature {
+        TcpObserved {
             version: match sig.version {
                 IpVersion::V4 => "IPv4".to_string(),
                 IpVersion::V6 => "IPv6".to_string(),
@@ -250,7 +307,7 @@ struct SynAckTCP {
     quality: String,
     dist: String,
     signature: String,
-    detail: TcpSignature,
+    observed: TcpObserved,
 }
 
 fn extract_os(operative_system: Option<&OperativeSystem>) -> String {
@@ -286,7 +343,7 @@ impl From<&SynTCPOutput> for SynAckTCP {
                 .map(|l| l.quality.to_string())
                 .unwrap_or_else(|| "0.00".to_string()),
             signature: output.sig.to_string(),
-            detail: TcpSignature::from(&output.sig),
+            observed: TcpObserved::from(&output.sig),
         }
     }
 }
@@ -302,7 +359,7 @@ impl From<&SynAckTCPOutput> for SynAckTCP {
                 .unwrap_or_else(|| "0.00".to_string()),
             dist: extract_dist_string(&output.sig.ittl),
             signature: output.sig.to_string(),
-            detail: TcpSignature::from(&output.sig),
+            observed: TcpObserved::from(&output.sig),
         }
     }
 }
@@ -400,6 +457,8 @@ async fn main() {
                     http_res.destination.ip.to_string(),
                     http_res.destination.port,
                 )
+            } else if let Some(tls_client) = &output.tls_client {
+                (tls_client.source.ip.to_string(), tls_client.source.port)
             } else {
                 continue;
             };
@@ -418,6 +477,7 @@ async fn main() {
                 uptime: None,
                 http_request: None,
                 http_response: None,
+                tls_client: None,
                 source_ip: None,
             });
 
@@ -439,6 +499,9 @@ async fn main() {
             if let Some(http_res) = &output.http_response {
                 tcp_info.http_response = Some(HttpResponse::from(http_res));
             }
+            if let Some(tls_client) = &output.tls_client {
+                tcp_info.tls_client = Some(TlsClient::from(tls_client));
+            }
             tcp_info.source_ip = Some(source_ip);
         }
     });
@@ -459,14 +522,34 @@ async fn main() {
         .fallback_service(ServeDir::new("static"));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-    info!("Server running on http://{}", addr);
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    if args.https {
+        info!("Server running on https://{}", addr);
 
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await
-    .unwrap();
+        // Configure TLS
+        let config = RustlsConfig::from_pem_file(&args.cert_path, &args.key_path)
+            .await
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Failed to load TLS certificates from {} and {}",
+                    args.cert_path, args.key_path
+                )
+            });
+
+        axum_server::bind_rustls(addr, config)
+            .serve(app.into_make_service_with_connect_info::<SocketAddr>())
+            .await
+            .unwrap();
+    } else {
+        info!("Server running on http://{}", addr);
+
+        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
+    }
 }

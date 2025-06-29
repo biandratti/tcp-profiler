@@ -5,9 +5,12 @@ edition = "2021"
 
 [dependencies]
 axum = "0.8.4"
+axum-server = { version = "0.7.1", features = ["tls-rustls"] }
 tokio = { version = "1.45.1", features = ["full"] }
+tokio-rustls = "0.26.2"
+rustls-pemfile = "2.2.0"
 serde = { version = "1.0", features = ["derive"] }
-passivetcp-rs = { version = "1.1.0"}
+passivetcp-rs = { path = "../../test/passivetcp-rs" }
 tower-http = { version = "0.6.6", features = ["fs", "cors"] }
 clap = { version = "4.5.40", features = ["derive"] }
 tracing = "0.1.41"

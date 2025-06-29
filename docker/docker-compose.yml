@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # Traefik reverse proxy - terminates TLS
+  traefik:
+    image: traefik:v3.0
+    container_name: tcp-profiler-traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=demo@tcp-profiler.local"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+      # For demo purposes, use self-signed certificates
+      - "--providers.file.directory=/certs"
+      - "--providers.file.watch=true"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8081:8080"  # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../../../certs:/certs:ro
+      - ./traefik-config:/etc/traefik/dynamic:ro
+    networks:
+      - tcp-profiler-net
+    depends_on:
+      - tcp-profiler-app
+
+  # Main TCP Profiler application with host network access
+  tcp-profiler-app:
+    build:
+      context: ../../..
+      dockerfile: personal/tcp-profiler/docker/Dockerfile
+    container_name: tcp-profiler-app
+    command: ["./tcp-profiler", "-i", "wlp0s20f3"]
+    network_mode: "host"
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    privileged: true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.tcp-profiler.rule=Host(`localhost`) || Host(`tcp-profiler.local`)"
+      - "traefik.http.routers.tcp-profiler.entrypoints=websecure"
+      - "traefik.http.routers.tcp-profiler.tls=true"
+      - "traefik.http.services.tcp-profiler.loadbalancer.server.port=8080"
+      # HTTP redirect
+      - "traefik.http.routers.tcp-profiler-http.rule=Host(`localhost`) || Host(`tcp-profiler.local`)"
+      - "traefik.http.routers.tcp-profiler-http.entrypoints=web"
+      - "traefik.http.routers.tcp-profiler-http.middlewares=https-redirect"
+      - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
+
+networks:
+  tcp-profiler-net:
+    driver: bridge 
