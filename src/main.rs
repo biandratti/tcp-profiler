@@ -366,7 +366,7 @@ async fn main() {
     info!("Starting Passive TCP analyzer on interface: {}", interface);
     std::thread::spawn(move || {
         debug!("Passive TCP analyzer thread started");
-        let _ = PassiveTcp::new(db_clone, 100).analyze_network(&interface, std_sender);
+        let _ = PassiveTcp::new(Some(db_clone), 100, None).analyze_network(&interface, std_sender);
     });
 
     // Bridge between std channel and async channel
