@@ -27,13 +27,13 @@ struct Args {
     #[arg(short = 'i', long)]
     interface: String,
 
-    #[arg(long, default_value = "true")]
+    #[arg(long, default_value = "false")]
     https: bool,
 
-    #[arg(long, default_value = "../certs/cert.pem")]
+        #[arg(long, default_value = "certs/cert.pem")]
     cert_path: String,
-
-    #[arg(long, default_value = "../certs/key.pem")]
+    
+    #[arg(long, default_value = "certs/key.pem")]
     key_path: String,
 }
 
