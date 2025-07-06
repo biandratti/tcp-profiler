@@ -5,7 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🦉 Huginn Network Profiler</title>
     <link rel="stylesheet" href="css/styles.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦉</text></svg>">
+    <link rel="preload" href="img/favicon.png" as="image" type="image/png">
+    <link rel="icon" type="image/x-icon" href="img/favicon/favicon.ico">
+    <link rel="icon" type="image/png" href="img/favicon.png">
+    <link rel="apple-touch-icon" href="img/favicon.png">
 </head>
 <body>
     <div class="app">
@@ -13,7 +16,6 @@
         <header class="header">
             <div class="header-content">
                 <div class="logo">
-                    <span class="logo-icon">🦉</span>
                     <h1>Huginn Network Profiler</h1>
                 </div>
                 <div class="header-controls">
@@ -109,7 +111,7 @@
                     </div>
                     
                     <div id="emptyState" class="empty-state">
-                        <div class="empty-icon">🦉</div>
+                        <div class="empty-icon">📊</div>
                         <h3>No Traffic Profiles Yet</h3>
                         <p>Start the network collector to see live traffic analysis.</p>
                         <div class="empty-actions">
