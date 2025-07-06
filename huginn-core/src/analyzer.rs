@@ -616,71 +616,6 @@ impl HuginnAnalyzer {
         }))
     }
 
-    /// Analyze HTTP response
-    fn analyze_http_response(&self, http_res: &HttpResponseOutput) -> Result<Option<HttpAnalysis>> {
-        let quality = http_res
-            .web_server_matched
-            .as_ref()
-            .map(|m| m.quality as f64)
-            .unwrap_or(0.0);
-
-        if quality < self.config.min_quality {
-            return Ok(None);
-        }
-
-        let browser = http_res
-            .web_server_matched
-            .as_ref()
-            .map(|m| self.extract_web_server_string(&m.web_server))
-            .unwrap_or_else(|| "Unknown".to_string());
-
-        let details = HttpDetails {
-            version: http_res.sig.version.to_string(),
-            header_order: http_res
-                .sig
-                .horder
-                .iter()
-                .map(|h| h.to_string())
-                .collect::<Vec<_>>()
-                .join(", "),
-            headers_absent: http_res
-                .sig
-                .habsent
-                .iter()
-                .map(|h| h.to_string())
-                .collect::<Vec<_>>()
-                .join(", "),
-            expected_software: http_res.sig.expsw.clone(),
-        };
-
-        // Extract response-specific data from headers
-        let horder_strings: Vec<String> =
-            http_res.sig.horder.iter().map(|h| h.to_string()).collect();
-
-        let response_data = crate::profile::HttpResponseData {
-            server: self.extract_header_value_from_horder(&horder_strings, "server"),
-            content_type: self.extract_header_value_from_horder(&horder_strings, "content-type"),
-            content_length: self
-                .extract_header_value_from_horder(&horder_strings, "content-length"),
-            set_cookie: self.extract_header_value_from_horder(&horder_strings, "set-cookie"),
-            cache_control: self.extract_header_value_from_horder(&horder_strings, "cache-control"),
-            status: Some("200".to_string()), // Default, could be extracted from signature
-            signature: http_res.sig.to_string(),
-            quality,
-        };
-
-        Ok(Some(HttpAnalysis {
-            browser,
-            quality,
-            language: None, // HTTP responses don't have language info
-            diagnosis: http_res.diagnosis.to_string(),
-            signature: http_res.sig.to_string(),
-            details,
-            request: None,
-            response: Some(response_data),
-        }))
-    }
-
     /// Analyze TLS client
     fn analyze_tls_client(&self, tls_client: &TlsClientOutput) -> Result<Option<TlsAnalysis>> {
         let details = TlsDetails {
@@ -720,17 +655,6 @@ impl HuginnAnalyzer {
             parts.push(family.clone());
         }
         if let Some(variant) = &browser.variant {
-            parts.push(variant.clone());
-        }
-        parts.join(" ")
-    }
-
-    fn extract_web_server_string(&self, web_server: &WebServer) -> String {
-        let mut parts = vec![web_server.name.clone()];
-        if let Some(family) = &web_server.family {
-            parts.push(family.clone());
-        }
-        if let Some(variant) = &web_server.variant {
             parts.push(variant.clone());
         }
         parts.join(" ")
@@ -836,18 +760,6 @@ impl HuginnAnalyzer {
     }
 
     fn emit_http_event(&self, profile: &TrafficProfile, _http_req: &HttpRequestOutput) {
-        if let Some(http) = &profile.http {
-            self.event_dispatcher.dispatch(TrafficEvent::HttpAnalyzed {
-                ip: profile.ip,
-                port: profile.port,
-                browser: http.browser.clone(),
-                quality: http.quality,
-                timestamp: Utc::now(),
-            });
-        }
-    }
-
-    fn emit_http_event_response(&self, profile: &TrafficProfile, _http_res: &HttpResponseOutput) {
         if let Some(http) = &profile.http {
             self.event_dispatcher.dispatch(TrafficEvent::HttpAnalyzed {
                 ip: profile.ip,

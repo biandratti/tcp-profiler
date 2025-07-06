@@ -325,7 +325,7 @@ pub async fn get_profiles(
     // Apply filters and convert to TcpInfo
     let mut filtered_profiles = HashMap::new();
 
-    for (key, profile) in all_profiles.iter() {
+    for (_key, profile) in all_profiles.iter() {
         // Apply completeness filter
         if let Some(min_completeness) = query.min_completeness {
             if profile.metadata.completeness < min_completeness {
