@@ -183,7 +183,7 @@ struct HttpResponse {
     diagnosis: String,
     web_server: String,
     quality: String,
-    sig: String,
+    observed: HttpObserved,
 }
 
 fn extract_web_server(web_server: Option<&WebServer>) -> String {
@@ -203,6 +203,30 @@ fn extract_web_server(web_server: Option<&WebServer>) -> String {
 
 impl From<&HttpResponseOutput> for HttpResponse {
     fn from(output: &HttpResponseOutput) -> Self {
+        let horder_str = output
+            .sig
+            .horder
+            .iter()
+            .map(|h| h.to_string())
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        let habsent_str = output
+            .sig
+            .habsent
+            .iter()
+            .map(|h| h.to_string())
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        let expsw_str = output.sig.expsw.clone();
+        let http_signature_observable = HttpObserved {
+            version: output.sig.version.to_string(),
+            horder: horder_str,
+            habsent: habsent_str,
+            expsw: expsw_str,
+        };
+
         HttpResponse {
             diagnosis: output.diagnosis.to_string(),
             web_server: extract_web_server(
@@ -213,7 +237,7 @@ impl From<&HttpResponseOutput> for HttpResponse {
                 .as_ref()
                 .map(|l| l.quality.to_string())
                 .unwrap_or_else(|| "0.00".to_string()),
-            sig: output.sig.to_string(),
+            observed: http_signature_observable,
         }
     }
 }
