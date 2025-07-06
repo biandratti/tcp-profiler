@@ -11,6 +11,20 @@ By exposing the huginn-net library through a simple web application, users can:
 
 This project aims to make advanced profiling accessible and interactive, helping users better understand network behaviors and improve their own tools or research.
 
+### Command Line Options
+
+```
+huginn-net-profiler [OPTIONS] --interface <INTERFACE>
+
+Options:
+  -i, --interface <INTERFACE>  Network interface to monitor
+      --cert <CERT>           Path to TLS certificate file (PEM format)
+      --key <KEY>             Path to TLS private key file (PEM format)  
+      --upgrade               Enable HTTP to HTTPS upgrade
+  -h, --help                  Print help
+  -V, --version               Print version
+```
+
 ###  Get network Interface
 ```
 ip link show
@@ -20,13 +34,49 @@ ip link show
 ```
 cargo build --release
 ```
+
+#### HTTP-only mode
 ```
 sudo RUST_LOG=info ./target/release/huginn-net-profiler --interface <interface>
 ```
-or debugging huginn-net
+
+#### With TLS support (HTTP + HTTPS dual protocol)
+```
+sudo RUST_LOG=info ./target/release/huginn-net-profiler --interface <interface> --cert cert.pem --key key.pem
+```
+
+#### With TLS and HTTP to HTTPS upgrade
+```
+sudo RUST_LOG=info ./target/release/huginn-net-profiler --interface <interface> --cert cert.pem --key key.pem --upgrade
+```
+
+#### Generate self-signed certificates for testing
+```
+# Generate private key
+openssl genrsa -out key.pem 2048
+
+# Generate self-signed certificate
+openssl req -new -x509 -key key.pem -out cert.pem -days 365 -subj "/CN=localhost"
+```
+
+#### Debugging huginn-net
 ```
 sudo RUST_LOG=huginn-net=debug ./target/release/huginn-net-profiler --interface <interface>
 ```
+
+### TLS Dual Protocol Support
+
+When TLS certificates are provided, the server supports both HTTP and HTTPS connections on the same port (8080):
+
+- **HTTP requests**: Served normally or upgraded to HTTPS (if `--upgrade` is enabled)
+- **HTTPS requests**: Served with TLS encryption
+- **Auto-upgrade**: HTTP requests can be automatically redirected to HTTPS
+- **Fallback**: If TLS certificates fail to load, the server falls back to HTTP-only mode
+
+This approach is ideal for:
+- Development environments where you want to test both protocols
+- Production setups where clients might connect via HTTP by mistake
+- Simplified deployment with a single port configuration
 
 
 ### Build and run docker image
