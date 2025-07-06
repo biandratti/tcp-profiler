@@ -75,7 +75,7 @@ cargo build --release
 ip link show
 
 # Run with default port 3000
-`sudo ./target/release/huginn-net-profiler --interface` eth0
+sudo ./target/release/huginn-net-profiler --interface eth0
 
 # Note: TLS support coming soon
 ```

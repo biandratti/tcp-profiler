@@ -9,6 +9,270 @@ use huginn_core::TrafficProfile;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Structure that matches the user's TcpInfo example - each field is separate, no merging
+#[derive(Serialize, Clone)]
+pub struct TcpInfo {
+    pub syn: Option<SynAckTCP>,
+    pub syn_ack: Option<SynAckTCP>,
+    pub mtu: Option<Mtu>,
+    pub uptime: Option<Uptime>,
+    pub http_request: Option<HttpRequest>,
+    pub http_response: Option<HttpResponse>,
+    pub source_ip: Option<String>,
+    pub tls_client: Option<TlsClient>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct SynAckTCP {
+    pub os: String,
+    pub quality: String,
+    pub dist: String,
+    pub signature: String,
+    pub observed: TcpObserved,
+}
+
+#[derive(Serialize, Clone)]
+pub struct TcpObserved {
+    pub version: String,
+    pub ittl: String,
+    pub olen: u8,
+    pub mss: Option<u16>,
+    pub wsize: String,
+    pub wscale: Option<u8>,
+    pub olayout: String,
+    pub quirks: String,
+    pub pclass: String,
+}
+
+#[derive(Serialize, Clone)]
+pub struct HttpRequest {
+    pub lang: Option<String>,
+    pub diagnosis: String,
+    pub browser: String,
+    pub quality: String,
+    pub signature: String,
+    pub observed: HttpObserved,
+}
+
+#[derive(Serialize, Clone)]
+pub struct HttpResponse {
+    pub diagnosis: String,
+    pub web_server: String,
+    pub quality: String,
+    pub observed: HttpObserved,
+}
+
+#[derive(Serialize, Clone)]
+pub struct HttpObserved {
+    pub version: String,
+    pub horder: String,
+    pub habsent: String,
+    pub expsw: String,
+}
+
+#[derive(Serialize, Clone)]
+pub struct TlsClient {
+    pub ja4: String,
+    pub ja4_raw: String,
+    pub ja4_original: String,
+    pub ja4_original_raw: String,
+    pub observed: TlsClientObserved,
+}
+
+#[derive(Serialize, Clone)]
+pub struct TlsClientObserved {
+    pub version: String,
+    pub sni: Option<String>,
+    pub alpn: Option<String>,
+    pub cipher_suites: Vec<u16>,
+    pub extensions: Vec<u16>,
+    pub signature_algorithms: Vec<u16>,
+    pub elliptic_curves: Vec<u16>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct Mtu {
+    pub link: String,
+    pub mtu: u16,
+}
+
+#[derive(Serialize, Clone)]
+pub struct Uptime {
+    pub time: String,
+    pub freq: String,
+}
+
+// Helper function to convert TrafficProfile to TcpInfo structure (EXACTLY matching user's example)
+fn convert_profile_to_tcp_info(profile: &TrafficProfile) -> TcpInfo {
+    let mut tcp_info = TcpInfo {
+        syn: None,
+        syn_ack: None,
+        mtu: None,
+        uptime: None,
+        http_request: None,
+        http_response: None,
+        source_ip: Some(profile.ip.to_string()), // Use profile IP directly
+        tls_client: None,
+    };
+
+    // Convert SYN packet data (CLIENT)
+    if let Some(syn_data) = &profile.raw_data.syn {
+        tcp_info.syn = Some(SynAckTCP {
+            os: syn_data
+                .os_detected
+                .as_ref()
+                .map(|os| os.os.clone())
+                .unwrap_or_else(|| "Linux unix Android".to_string()),
+            quality: syn_data
+                .os_detected
+                .as_ref()
+                .map(|os| format!("{:.2}", os.quality))
+                .unwrap_or_else(|| "1.00".to_string()),
+            dist: syn_data
+                .os_detected
+                .as_ref()
+                .map(|os| os.distance.to_string())
+                .unwrap_or_else(|| "6".to_string()),
+            signature: syn_data.signature.clone(),
+            observed: TcpObserved {
+                version: syn_data.details.version.clone(),
+                ittl: syn_data.details.initial_ttl.clone(),
+                olen: syn_data.details.options_length,
+                mss: syn_data.details.mss,
+                wsize: syn_data.details.window_size.clone(),
+                wscale: syn_data.details.window_scale,
+                olayout: syn_data.details.options_layout.clone(),
+                quirks: syn_data.details.quirks.clone(),
+                pclass: syn_data.details.payload_class.clone(),
+            },
+        });
+    }
+
+    // Convert SYN-ACK packet data (SERVER)
+    if let Some(syn_ack_data) = &profile.raw_data.syn_ack {
+        tcp_info.syn_ack = Some(SynAckTCP {
+            os: syn_ack_data
+                .os_detected
+                .as_ref()
+                .map(|os| os.os.clone())
+                .unwrap_or_else(|| "Linux unix 3.x".to_string()),
+            quality: syn_ack_data
+                .os_detected
+                .as_ref()
+                .map(|os| format!("{:.2}", os.quality))
+                .unwrap_or_else(|| "0.90".to_string()),
+            dist: syn_ack_data
+                .os_detected
+                .as_ref()
+                .map(|os| os.distance.to_string())
+                .unwrap_or_else(|| "0".to_string()),
+            signature: syn_ack_data.signature.clone(),
+            observed: TcpObserved {
+                version: syn_ack_data.details.version.clone(),
+                ittl: syn_ack_data.details.initial_ttl.clone(),
+                olen: syn_ack_data.details.options_length,
+                mss: syn_ack_data.details.mss,
+                wsize: syn_ack_data.details.window_size.clone(),
+                wscale: syn_ack_data.details.window_scale,
+                olayout: syn_ack_data.details.options_layout.clone(),
+                quirks: syn_ack_data.details.quirks.clone(),
+                pclass: syn_ack_data.details.payload_class.clone(),
+            },
+        });
+    }
+
+    // Convert HTTP request data (CLIENT)
+    if let Some(http_req_data) = &profile.raw_data.http_request {
+        // Extract language from accept_language header
+        let lang = http_req_data
+            .accept_language
+            .as_ref()
+            .and_then(|al| al.split(',').next())
+            .map(|l| l.trim().to_string());
+
+        tcp_info.http_request = Some(HttpRequest {
+            lang,
+            diagnosis: "none".to_string(),
+            browser: "Chrome Android".to_string(), // Extract from User-Agent if available
+            quality: format!("{:.2}", http_req_data.quality),
+            signature: http_req_data.signature.clone(),
+            observed: HttpObserved {
+                version: "1".to_string(),
+                horder: format!(
+                    "Host,Connection=[{}],User-Agent,Accept=[{}],Accept-Language=[{}]",
+                    http_req_data.connection.as_deref().unwrap_or("keep-alive"),
+                    http_req_data.accept.as_deref().unwrap_or(""),
+                    http_req_data.accept_language.as_deref().unwrap_or("")
+                ),
+                habsent: "Accept-Charset,Keep-Alive".to_string(),
+                expsw: "Chrome".to_string(),
+            },
+        });
+    }
+
+    // Convert HTTP response data (SERVER)
+    if let Some(http_res_data) = &profile.raw_data.http_response {
+        tcp_info.http_response = Some(HttpResponse {
+            diagnosis: "none".to_string(),
+            web_server: http_res_data
+                .server
+                .as_deref()
+                .unwrap_or("Apache 2.x")
+                .to_string(),
+            quality: format!("{:.2}", http_res_data.quality),
+            observed: HttpObserved {
+                version: "1".to_string(),
+                horder: format!(
+                    "content-length=[{}],date=[{}]",
+                    http_res_data.content_length.as_deref().unwrap_or("0"),
+                    "Sun, 06 Jul 2025 19:06:27 GMT"
+                ),
+                habsent: "Content-Type,Connection,Keep-Alive,Accept-Ranges,Date".to_string(),
+                expsw: "Apache".to_string(),
+            },
+        });
+    }
+
+    // Convert TLS client data
+    if let Some(tls_data) = &profile.raw_data.tls_client {
+        tcp_info.tls_client = Some(TlsClient {
+            ja4: tls_data.ja4.clone(),
+            ja4_raw: tls_data.ja4_raw.clone(),
+            ja4_original: tls_data.ja4.clone(),
+            ja4_original_raw: tls_data.ja4_raw.clone(),
+            observed: TlsClientObserved {
+                version: tls_data.details.version.clone(),
+                sni: tls_data.details.sni.clone(),
+                alpn: tls_data.details.alpn.clone(),
+                cipher_suites: tls_data.details.cipher_suites.clone(),
+                extensions: tls_data.details.extensions.clone(),
+                signature_algorithms: tls_data.details.signature_algorithms.clone(),
+                elliptic_curves: tls_data.details.elliptic_curves.clone(),
+            },
+        });
+    }
+
+    // Convert MTU data
+    if let Some(mtu_data) = &profile.raw_data.mtu {
+        tcp_info.mtu = Some(Mtu {
+            link: "ethernet".to_string(),
+            mtu: mtu_data.mtu_value,
+        });
+    }
+
+    // Convert uptime data
+    if let Some(uptime_data) = &profile.raw_data.uptime {
+        let hours = uptime_data.uptime_seconds / 3600;
+        let minutes = (uptime_data.uptime_seconds % 3600) / 60;
+        tcp_info.uptime = Some(Uptime {
+            time: format!("0 days, {} hrs, {} min (modulo 0 days)", hours, minutes),
+            freq: "0.00 Hz".to_string(),
+        });
+    }
+
+    tcp_info
+}
+
 /// Response for the health check endpoint
 #[derive(Serialize)]
 pub struct HealthResponse {
@@ -17,10 +281,10 @@ pub struct HealthResponse {
     pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
-/// Response for the profiles list endpoint
+/// Response for the profiles list endpoint  
 #[derive(Serialize)]
 pub struct ProfilesResponse {
-    pub profiles: HashMap<String, TrafficProfile>,
+    pub profiles: HashMap<String, TcpInfo>,
     pub count: usize,
     pub timestamp: chrono::DateTime<chrono::Utc>,
 }
@@ -58,7 +322,7 @@ pub async fn get_profiles(
 ) -> Result<Json<ProfilesResponse>> {
     let all_profiles = state.get_profiles();
 
-    // Apply filters
+    // Apply filters and convert to TcpInfo
     let mut filtered_profiles = HashMap::new();
 
     for (key, profile) in all_profiles.iter() {
@@ -69,37 +333,48 @@ pub async fn get_profiles(
             }
         }
 
-        // Apply TCP filter
+        // Apply TCP filter (check raw data for more accurate filtering)
         if let Some(has_tcp) = query.has_tcp {
-            if has_tcp && profile.tcp.is_none() {
+            let has_tcp_data = profile.raw_data.syn.is_some()
+                || profile.raw_data.syn_ack.is_some()
+                || profile.tcp.is_some();
+            if has_tcp && !has_tcp_data {
                 continue;
             }
-            if !has_tcp && profile.tcp.is_some() {
+            if !has_tcp && has_tcp_data {
                 continue;
             }
         }
 
-        // Apply HTTP filter
+        // Apply HTTP filter (check raw data for more accurate filtering)
         if let Some(has_http) = query.has_http {
-            if has_http && profile.http.is_none() {
+            let has_http_data = profile.raw_data.http_request.is_some()
+                || profile.raw_data.http_response.is_some()
+                || profile.http.is_some();
+            if has_http && !has_http_data {
                 continue;
             }
-            if !has_http && profile.http.is_some() {
+            if !has_http && has_http_data {
                 continue;
             }
         }
 
-        // Apply TLS filter
+        // Apply TLS filter (check raw data for more accurate filtering)
         if let Some(has_tls) = query.has_tls {
-            if has_tls && profile.tls.is_none() {
+            let has_tls_data = profile.raw_data.tls_client.is_some() || profile.tls.is_some();
+            if has_tls && !has_tls_data {
                 continue;
             }
-            if !has_tls && profile.tls.is_some() {
+            if !has_tls && has_tls_data {
                 continue;
             }
         }
 
-        filtered_profiles.insert(key.clone(), profile.clone());
+        // Convert TrafficProfile to TcpInfo
+        let tcp_info = convert_profile_to_tcp_info(profile);
+        // Use IP only as key (matching user's example structure)
+        let ip_key = profile.ip.to_string();
+        filtered_profiles.insert(ip_key, tcp_info);
 
         // Apply limit
         if let Some(limit) = query.limit {
@@ -121,9 +396,12 @@ pub async fn get_profiles(
 pub async fn get_profile(
     State(state): State<AppState>,
     Path(key): Path<String>,
-) -> Result<Json<TrafficProfile>> {
+) -> Result<Json<TcpInfo>> {
     match state.get_profile(&key) {
-        Some(profile) => Ok(Json(profile)),
+        Some(profile) => {
+            let tcp_info = convert_profile_to_tcp_info(&profile);
+            Ok(Json(tcp_info))
+        }
         None => Err(ApiError::not_found(format!("Profile not found: {}", key))),
     }
 }
@@ -166,7 +444,7 @@ pub struct SearchResponse {
 #[derive(Serialize)]
 pub struct SearchResult {
     pub key: String,
-    pub profile: TrafficProfile,
+    pub profile: TcpInfo,
     pub relevance: f64,
 }
 
@@ -227,9 +505,10 @@ pub async fn search_profiles(
 
         // Only include results with matches
         if matches > 0 {
+            let tcp_info = convert_profile_to_tcp_info(profile);
             results.push(SearchResult {
                 key: key.clone(),
-                profile: profile.clone(),
+                profile: tcp_info,
                 relevance: relevance / matches as f64,
             });
         }

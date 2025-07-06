@@ -11,14 +11,143 @@ pub struct TrafficProfile {
     pub port: u16,
     /// When this profile was created/updated
     pub timestamp: DateTime<Utc>,
-    /// TCP analysis results
+    /// Raw fingerprint data (separated by source)
+    pub raw_data: RawFingerprintData,
+    /// TCP analysis results (legacy - for backwards compatibility)
     pub tcp: Option<TcpAnalysis>,
-    /// HTTP analysis results  
+    /// TCP analysis from client packets (SYN) - for backwards compatibility
+    pub tcp_client: Option<TcpAnalysis>,
+    /// TCP analysis from server packets (SYN-ACK) - for backwards compatibility  
+    pub tcp_server: Option<TcpAnalysis>,
+    /// HTTP analysis results (legacy - for backwards compatibility)
     pub http: Option<HttpAnalysis>,
-    /// TLS analysis results
+    /// TLS analysis results (legacy - for backwards compatibility)
     pub tls: Option<TlsAnalysis>,
     /// Additional metadata
     pub metadata: ProfileMetadata,
+}
+
+/// Raw fingerprint data separated by source type
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RawFingerprintData {
+    /// SYN packet (from client)
+    pub syn: Option<SynPacketData>,
+    /// SYN-ACK packet (from server)
+    pub syn_ack: Option<SynAckPacketData>,
+    /// MTU detection data
+    pub mtu: Option<MtuData>,
+    /// Uptime detection data
+    pub uptime: Option<UptimeData>,
+    /// HTTP request (from client)
+    pub http_request: Option<HttpRequestData>,
+    /// HTTP response (from server)
+    pub http_response: Option<HttpResponseData>,
+    /// TLS client data
+    pub tls_client: Option<TlsClientData>,
+    /// Source IP (if available)
+    pub source_ip: Option<String>,
+}
+
+/// SYN packet data (from client)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SynPacketData {
+    /// Source IP and port
+    pub source: NetworkEndpoint,
+    /// OS detection result
+    pub os_detected: Option<OsDetection>,
+    /// TCP signature
+    pub signature: String,
+    /// Raw packet details
+    pub details: TcpDetails,
+    /// When this was detected
+    pub timestamp: DateTime<Utc>,
+}
+
+/// SYN-ACK packet data (from server)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SynAckPacketData {
+    /// Source (server) IP and port
+    pub source: NetworkEndpoint,
+    /// Destination (client) IP and port
+    pub destination: NetworkEndpoint,
+    /// OS detection result
+    pub os_detected: Option<OsDetection>,
+    /// TCP signature
+    pub signature: String,
+    /// Raw packet details
+    pub details: TcpDetails,
+    /// When this was detected
+    pub timestamp: DateTime<Utc>,
+}
+
+/// MTU detection data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MtuData {
+    /// Source IP and port
+    pub source: NetworkEndpoint,
+    /// Detected MTU value
+    pub mtu_value: u16,
+    /// When this was detected
+    pub timestamp: DateTime<Utc>,
+}
+
+/// Uptime detection data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UptimeData {
+    /// Source IP and port
+    pub source: NetworkEndpoint,
+    /// Detected uptime in seconds
+    pub uptime_seconds: u64,
+    /// When this was detected
+    pub timestamp: DateTime<Utc>,
+}
+
+/// TLS client data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TlsClientData {
+    /// Source IP and port
+    pub source: NetworkEndpoint,
+    /// JA4 fingerprint
+    pub ja4: String,
+    /// JA4 raw fingerprint
+    pub ja4_raw: String,
+    /// TLS details
+    pub details: TlsDetails,
+    /// When this was detected
+    pub timestamp: DateTime<Utc>,
+}
+
+/// Network endpoint (IP + port)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkEndpoint {
+    pub ip: String,
+    pub port: u16,
+}
+
+/// OS detection result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OsDetection {
+    /// Operating system name
+    pub os: String,
+    /// Detection quality/confidence
+    pub quality: f64,
+    /// Network distance (hops)
+    pub distance: u8,
+}
+
+impl Default for RawFingerprintData {
+    fn default() -> Self {
+        Self {
+            syn: None,
+            syn_ack: None,
+            mtu: None,
+            uptime: None,
+            http_request: None,
+            http_response: None,
+            tls_client: None,
+            source_ip: None,
+        }
+    }
 }
 
 /// TCP connection analysis
@@ -172,7 +301,10 @@ impl TrafficProfile {
             ip,
             port,
             timestamp: now,
+            raw_data: RawFingerprintData::default(),
             tcp: None,
+            tcp_client: None,
+            tcp_server: None,
             http: None,
             tls: None,
             metadata: ProfileMetadata {
@@ -187,6 +319,18 @@ impl TrafficProfile {
     /// Update the profile with new analysis data
     pub fn update_tcp(&mut self, tcp: TcpAnalysis) {
         self.tcp = Some(tcp);
+        self.update_metadata();
+    }
+
+    /// Update the profile with TCP client analysis (from SYN packets)
+    pub fn update_tcp_client(&mut self, tcp: TcpAnalysis) {
+        self.tcp_client = Some(tcp);
+        self.update_metadata();
+    }
+
+    /// Update the profile with TCP server analysis (from SYN-ACK packets)
+    pub fn update_tcp_server(&mut self, tcp: TcpAnalysis) {
+        self.tcp_server = Some(tcp);
         self.update_metadata();
     }
 
@@ -228,7 +372,7 @@ impl TrafficProfile {
 
         // Calculate completeness based on available data
         let mut score = 0.0;
-        if self.tcp.is_some() {
+        if self.tcp.is_some() || self.tcp_client.is_some() || self.tcp_server.is_some() {
             score += 0.4;
         }
         if self.http.is_some() {
@@ -243,7 +387,11 @@ impl TrafficProfile {
 
     /// Check if profile has any analysis data
     pub fn is_empty(&self) -> bool {
-        self.tcp.is_none() && self.http.is_none() && self.tls.is_none()
+        self.tcp.is_none()
+            && self.tcp_client.is_none()
+            && self.tcp_server.is_none()
+            && self.http.is_none()
+            && self.tls.is_none()
     }
 
     /// Get a summary string of available data
@@ -251,6 +399,12 @@ impl TrafficProfile {
         let mut parts = Vec::new();
         if self.tcp.is_some() {
             parts.push("TCP");
+        }
+        if self.tcp_client.is_some() {
+            parts.push("TCP-Client");
+        }
+        if self.tcp_server.is_some() {
+            parts.push("TCP-Server");
         }
         if self.http.is_some() {
             parts.push("HTTP");

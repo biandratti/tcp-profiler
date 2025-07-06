@@ -297,7 +297,7 @@ impl NetworkCollector {
         // Analyze the result using huginn-core
         match self.analyzer.analyze(result) {
             Ok(Some(profile)) => {
-                let key = format!("{}:{}", profile.ip, profile.port);
+                let key = profile.ip.to_string(); // Group by IP only, not IP:port
 
                 // Check if this is a new profile or an update
                 let is_new_profile = !self.profiles.contains_key(&key);
@@ -337,6 +337,16 @@ impl NetworkCollector {
             existing.tcp = new.tcp;
         }
 
+        // Update TCP client data if new profile has it
+        if new.tcp_client.is_some() {
+            existing.tcp_client = new.tcp_client;
+        }
+
+        // Update TCP server data if new profile has it
+        if new.tcp_server.is_some() {
+            existing.tcp_server = new.tcp_server;
+        }
+
         // Update HTTP data if new profile has it
         if new.http.is_some() {
             existing.http = new.http;
@@ -347,6 +357,32 @@ impl NetworkCollector {
             existing.tls = new.tls;
         }
 
+        // Update raw data (no merge, just replace)
+        if new.raw_data.syn.is_some() {
+            existing.raw_data.syn = new.raw_data.syn;
+        }
+        if new.raw_data.syn_ack.is_some() {
+            existing.raw_data.syn_ack = new.raw_data.syn_ack;
+        }
+        if new.raw_data.http_request.is_some() {
+            existing.raw_data.http_request = new.raw_data.http_request;
+        }
+        if new.raw_data.http_response.is_some() {
+            existing.raw_data.http_response = new.raw_data.http_response;
+        }
+        if new.raw_data.tls_client.is_some() {
+            existing.raw_data.tls_client = new.raw_data.tls_client;
+        }
+        if new.raw_data.mtu.is_some() {
+            existing.raw_data.mtu = new.raw_data.mtu;
+        }
+        if new.raw_data.uptime.is_some() {
+            existing.raw_data.uptime = new.raw_data.uptime;
+        }
+        if new.raw_data.source_ip.is_some() {
+            existing.raw_data.source_ip = new.raw_data.source_ip;
+        }
+
         // Update metadata
         existing.timestamp = new.timestamp;
         existing.metadata.last_updated = new.metadata.last_updated;
@@ -354,7 +390,8 @@ impl NetworkCollector {
 
         // Recalculate completeness
         let mut score = 0.0;
-        if existing.tcp.is_some() {
+        if existing.tcp.is_some() || existing.tcp_client.is_some() || existing.tcp_server.is_some()
+        {
             score += 0.4;
         }
         if existing.http.is_some() {

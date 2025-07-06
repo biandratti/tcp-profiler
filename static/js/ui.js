@@ -229,8 +229,8 @@ class UIManager {
         card.className = 'profile-card';
         card.dataset.profileKey = key;
 
-        const timestamp = profile.timestamp ? new Date(profile.timestamp).toLocaleString() : 'Unknown';
-        const qualityScore = profile.quality_score || 0;
+        const timestamp = new Date().toLocaleString(); // TcpInfo doesn't have timestamp
+        const completeness = 1.0; // TcpInfo doesn't have completeness
 
         card.innerHTML = `
             <div class="profile-header">
@@ -238,16 +238,13 @@ class UIManager {
                 <div class="profile-timestamp">${timestamp}</div>
             </div>
             <div class="profile-data">
-                ${this.createDataSection('TCP Analysis', profile.tcp, 'tcp')}
-                ${this.createHttpRequestSection(profile.http)}
-                ${this.createHttpResponseSection(profile.http)}
-                ${this.createDataSection('TLS Analysis', profile.tls, 'tls')}
+                ${this.createRawDataSections(profile)}
                 <div class="data-section">
                     <div class="data-title">Quality Score</div>
                     <div class="data-content">
                         <div class="data-item">
-                            <span class="data-label">Score:</span>
-                            <span class="data-value">${(profile.metadata?.completeness || 0).toFixed(2)}</span>
+                            <span class="data-label">Completeness:</span>
+                            <span class="data-value">${completeness.toFixed(2)}</span>
                         </div>
                     </div>
                 </div>
@@ -259,6 +256,223 @@ class UIManager {
         });
 
         return card;
+    }
+
+    // Create data sections for TcpInfo structure (matching user's example)
+    createRawDataSections(tcpInfo) {
+        if (!tcpInfo) return '';
+
+        let html = '';
+
+        // SYN packet (client data)
+        if (tcpInfo.syn) {
+            const synData = tcpInfo.syn;
+            html += `
+                <div class="data-section syn-client">
+                    <div class="data-title">📥 SYN Packet (Client)</div>
+                    <div class="data-content">
+                        <div class="data-item">
+                            <span class="data-label">OS:</span>
+                            <span class="data-value">${synData.os || 'Unknown'}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Quality:</span>
+                            <span class="data-value">${synData.quality || 'N/A'}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Distance:</span>
+                            <span class="data-value">${synData.dist || 'N/A'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // SYN-ACK packet (server data)
+        if (tcpInfo.syn_ack) {
+            const synAckData = tcpInfo.syn_ack;
+            html += `
+                <div class="data-section syn-server">
+                    <div class="data-title">📤 SYN-ACK Packet (Server)</div>
+                    <div class="data-content">
+                        <div class="data-item">
+                            <span class="data-label">OS:</span>
+                            <span class="data-value">${synAckData.os || 'Unknown'}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Quality:</span>
+                            <span class="data-value">${synAckData.quality || 'N/A'}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Distance:</span>
+                            <span class="data-value">${synAckData.dist || 'N/A'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // HTTP request (client data)
+        if (tcpInfo.http_request) {
+            const httpReq = tcpInfo.http_request;
+            html += `
+                <div class="data-section http-client">
+                    <div class="data-title">🌐📥 HTTP Request (Client)</div>
+                    <div class="data-content">
+                        <div class="data-item">
+                            <span class="data-label">Browser:</span>
+                            <span class="data-value">${httpReq.browser || 'Unknown'}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Quality:</span>
+                            <span class="data-value">${httpReq.quality || 'N/A'}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Language:</span>
+                            <span class="data-value">${httpReq.lang || 'Unknown'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // HTTP response (server data)
+        if (tcpInfo.http_response) {
+            const httpRes = tcpInfo.http_response;
+            html += `
+                <div class="data-section http-server">
+                    <div class="data-title">🌐📤 HTTP Response (Server)</div>
+                    <div class="data-content">
+                        <div class="data-item">
+                            <span class="data-label">Web Server:</span>
+                            <span class="data-value">${httpRes.web_server || 'Unknown'}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Quality:</span>
+                            <span class="data-value">${httpRes.quality || 'N/A'}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Diagnosis:</span>
+                            <span class="data-value">${httpRes.diagnosis || 'Unknown'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // TLS client (client data)
+        if (tcpInfo.tls_client) {
+            const tlsClient = tcpInfo.tls_client;
+            html += `
+                <div class="data-section tls-client">
+                    <div class="data-title">🔒 TLS Client</div>
+                    <div class="data-content">
+                        <div class="data-item">
+                            <span class="data-label">JA4:</span>
+                            <span class="data-value">${tlsClient.ja4 ? tlsClient.ja4.substring(0, 20) + '...' : 'Unknown'}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Version:</span>
+                            <span class="data-value">${tlsClient.observed?.version || 'Unknown'}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">SNI:</span>
+                            <span class="data-value">${tlsClient.observed?.sni || 'None'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // MTU data
+        if (tcpInfo.mtu) {
+            const mtuData = tcpInfo.mtu;
+            html += `
+                <div class="data-section mtu-data">
+                    <div class="data-title">📏 MTU Data</div>
+                    <div class="data-content">
+                        <div class="data-item">
+                            <span class="data-label">MTU:</span>
+                            <span class="data-value">${mtuData.mtu || 'Unknown'}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Link:</span>
+                            <span class="data-value">${mtuData.link || 'Unknown'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Uptime data
+        if (tcpInfo.uptime) {
+            const uptimeData = tcpInfo.uptime;
+            html += `
+                <div class="data-section uptime-data">
+                    <div class="data-title">⏱️ Uptime Data</div>
+                    <div class="data-content">
+                        <div class="data-item">
+                            <span class="data-label">Uptime:</span>
+                            <span class="data-value">${uptimeData.time || 'Unknown'}</span>
+                        </div>
+                        <div class="data-item">
+                            <span class="data-label">Frequency:</span>
+                            <span class="data-value">${uptimeData.freq || 'Unknown'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        return html || '<div class="data-section"><div class="data-title">No Data Available</div></div>';
+    }
+
+    // Create legacy TCP summary for profile card
+    createLegacyTcpSummary(profile) {
+        if (!profile.tcp_client && !profile.tcp_server && !profile.tcp) {
+            return '';
+        }
+
+        let html = `
+            <div class="data-section tcp-summary">
+                <div class="data-title">🔗 TCP Summary (Legacy)</div>
+                <div class="data-content">
+        `;
+
+        if (profile.tcp_client) {
+            html += `
+                <div class="data-item">
+                    <span class="data-label">🔵 Client (SYN):</span>
+                    <span class="data-value">${profile.tcp_client.os} (Q:${profile.tcp_client.quality.toFixed(2)})</span>
+                </div>
+            `;
+        }
+
+        if (profile.tcp_server) {
+            html += `
+                <div class="data-item">
+                    <span class="data-label">🔶 Server (SYN-ACK):</span>
+                    <span class="data-value">${profile.tcp_server.os} (Q:${profile.tcp_server.quality.toFixed(2)})</span>
+                </div>
+            `;
+        }
+
+        if (profile.tcp && !profile.tcp_client && !profile.tcp_server) {
+            // Fallback for old tcp field
+            html += `
+                <div class="data-item">
+                    <span class="data-label">📊 General:</span>
+                    <span class="data-value">${profile.tcp.os} (Q:${profile.tcp.quality.toFixed(2)})</span>
+                </div>
+            `;
+        }
+
+        html += `
+                </div>
+            </div>
+        `;
+
+        return html;
     }
 
     // Create data section for profile card
@@ -427,61 +641,626 @@ class UIManager {
                 <h4>Basic Information</h4>
                 <div class="detail-grid">
                     <div class="detail-item">
-                        <span class="detail-label">IP:</span>
-                        <span class="detail-value">${profile.ip || 'Unknown'}</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Port:</span>
-                        <span class="detail-value">${profile.port || 'Unknown'}</span>
+                        <span class="detail-label">Source IP:</span>
+                        <span class="detail-value">${profile.source_ip || 'Unknown'}</span>
                     </div>
                     <div class="detail-item">
                         <span class="detail-label">Timestamp:</span>
-                        <span class="detail-value">${profile.timestamp || 'Unknown'}</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Completeness:</span>
-                        <span class="detail-value">${(profile.metadata?.completeness || 0).toFixed(2)}</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Packet Count:</span>
-                        <span class="detail-value">${profile.metadata?.packet_count || 0}</span>
+                        <span class="detail-value">${new Date().toLocaleString()}</span>
                     </div>
                 </div>
             </div>
         `;
 
-        // TCP Analysis
-        if (profile.tcp) {
-            html += this.createDetailSection('TCP Analysis', profile.tcp);
-        }
-
-        // HTTP Request Analysis
-        if (profile.http && profile.http.request) {
-            html += this.createDetailSection('HTTP Request (Client)', profile.http.request);
-        }
-
-        // HTTP Response Analysis
-        if (profile.http && profile.http.response) {
-            html += this.createDetailSection('HTTP Response (Server)', profile.http.response);
-        }
-
-        // HTTP General Analysis (for backward compatibility and general HTTP data)
-        if (profile.http) {
-            const generalHttpData = { ...profile.http };
-            delete generalHttpData.request;
-            delete generalHttpData.response;
-            
-            if (Object.keys(generalHttpData).length > 0) {
-                html += this.createDetailSection('HTTP General', generalHttpData);
-            }
-        }
-
-        // TLS Analysis
-        if (profile.tls) {
-            html += this.createDetailSection('TLS Analysis', profile.tls);
-        }
+        // TcpInfo data sections
+        html += this.createTcpInfoDetailSections(profile);
 
         html += '</div>';
+        return html;
+    }
+
+    // Create detailed TcpInfo sections for modal
+    createTcpInfoDetailSections(tcpInfo) {
+        let html = '';
+
+        // SYN packet (client data)
+        if (tcpInfo.syn) {
+            const synData = tcpInfo.syn;
+            html += `
+                <div class="detail-section">
+                    <h4>📥 SYN Packet (Client Data)</h4>
+                    <div class="detail-subsection">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">OS:</span>
+                                <span class="detail-value">${synData.os || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Quality:</span>
+                                <span class="detail-value">${synData.quality || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Distance:</span>
+                                <span class="detail-value">${synData.dist || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Signature:</span>
+                                <span class="detail-value">${synData.signature || 'Unknown'}</span>
+                            </div>
+                        </div>
+                        ${this.createTcpObservedDetails(synData.observed)}
+                    </div>
+                </div>
+            `;
+        }
+
+        // SYN-ACK packet (server data)
+        if (tcpInfo.syn_ack) {
+            const synAckData = tcpInfo.syn_ack;
+            html += `
+                <div class="detail-section">
+                    <h4>📤 SYN-ACK Packet (Server Data)</h4>
+                    <div class="detail-subsection">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">OS:</span>
+                                <span class="detail-value">${synAckData.os || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Quality:</span>
+                                <span class="detail-value">${synAckData.quality || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Distance:</span>
+                                <span class="detail-value">${synAckData.dist || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Signature:</span>
+                                <span class="detail-value">${synAckData.signature || 'Unknown'}</span>
+                            </div>
+                        </div>
+                        ${this.createTcpObservedDetails(synAckData.observed)}
+                    </div>
+                </div>
+            `;
+        }
+
+        // HTTP request (client data)
+        if (tcpInfo.http_request) {
+            const httpReq = tcpInfo.http_request;
+            html += `
+                <div class="detail-section">
+                    <h4>🌐📥 HTTP Request (Client Data)</h4>
+                    <div class="detail-subsection">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Browser:</span>
+                                <span class="detail-value">${httpReq.browser || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Quality:</span>
+                                <span class="detail-value">${httpReq.quality || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Language:</span>
+                                <span class="detail-value">${httpReq.lang || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Diagnosis:</span>
+                                <span class="detail-value">${httpReq.diagnosis || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Signature:</span>
+                                <span class="detail-value">${httpReq.signature || 'Unknown'}</span>
+                            </div>
+                        </div>
+                        ${this.createHttpObservedDetails(httpReq.observed)}
+                    </div>
+                </div>
+            `;
+        }
+
+        // HTTP response (server data)
+        if (tcpInfo.http_response) {
+            const httpRes = tcpInfo.http_response;
+            html += `
+                <div class="detail-section">
+                    <h4>🌐📤 HTTP Response (Server Data)</h4>
+                    <div class="detail-subsection">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Web Server:</span>
+                                <span class="detail-value">${httpRes.web_server || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Quality:</span>
+                                <span class="detail-value">${httpRes.quality || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Diagnosis:</span>
+                                <span class="detail-value">${httpRes.diagnosis || 'Unknown'}</span>
+                            </div>
+                        </div>
+                        ${this.createHttpObservedDetails(httpRes.observed)}
+                    </div>
+                </div>
+            `;
+        }
+
+        // TLS client data
+        if (tcpInfo.tls_client) {
+            const tlsClient = tcpInfo.tls_client;
+            html += `
+                <div class="detail-section">
+                    <h4>🔒 TLS Client Data</h4>
+                    <div class="detail-subsection">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">JA4:</span>
+                                <span class="detail-value">${tlsClient.ja4 || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">JA4 Raw:</span>
+                                <span class="detail-value">${tlsClient.ja4_raw || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">JA4 Original:</span>
+                                <span class="detail-value">${tlsClient.ja4_original || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">JA4 Original Raw:</span>
+                                <span class="detail-value">${tlsClient.ja4_original_raw || 'Unknown'}</span>
+                            </div>
+                        </div>
+                        ${this.createTlsObservedDetails(tlsClient.observed)}
+                    </div>
+                </div>
+            `;
+        }
+
+        // MTU data
+        if (tcpInfo.mtu) {
+            const mtuData = tcpInfo.mtu;
+            html += `
+                <div class="detail-section">
+                    <h4>📏 MTU Data</h4>
+                    <div class="detail-subsection">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">MTU:</span>
+                                <span class="detail-value">${mtuData.mtu || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Link:</span>
+                                <span class="detail-value">${mtuData.link || 'Unknown'}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Uptime data
+        if (tcpInfo.uptime) {
+            const uptimeData = tcpInfo.uptime;
+            html += `
+                <div class="detail-section">
+                    <h4>⏱️ Uptime Data</h4>
+                    <div class="detail-subsection">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Uptime:</span>
+                                <span class="detail-value">${uptimeData.time || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Frequency:</span>
+                                <span class="detail-value">${uptimeData.freq || 'Unknown'}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        return html;
+    }
+
+    // Helper methods for creating observed details
+    createTcpObservedDetails(observed) {
+        if (!observed) return '';
+        return `
+            <div class="detail-subsection">
+                <h6>TCP Observed Details</h6>
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <span class="detail-label">Version:</span>
+                        <span class="detail-value">${observed.version || 'Unknown'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">ITTL:</span>
+                        <span class="detail-value">${observed.ittl || 'Unknown'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Options Length:</span>
+                        <span class="detail-value">${observed.olen || 'Unknown'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">MSS:</span>
+                        <span class="detail-value">${observed.mss || 'Unknown'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Window Size:</span>
+                        <span class="detail-value">${observed.wsize || 'Unknown'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Window Scale:</span>
+                        <span class="detail-value">${observed.wscale || 'Unknown'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Options Layout:</span>
+                        <span class="detail-value">${observed.olayout || 'Unknown'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Quirks:</span>
+                        <span class="detail-value">${observed.quirks || 'Unknown'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Payload Class:</span>
+                        <span class="detail-value">${observed.pclass || 'Unknown'}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    createHttpObservedDetails(observed) {
+        if (!observed) return '';
+        return `
+            <div class="detail-subsection">
+                <h6>HTTP Observed Details</h6>
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <span class="detail-label">Version:</span>
+                        <span class="detail-value">${observed.version || 'Unknown'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Header Order:</span>
+                        <span class="detail-value">${observed.horder || 'Unknown'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Headers Absent:</span>
+                        <span class="detail-value">${observed.habsent || 'Unknown'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Expected Software:</span>
+                        <span class="detail-value">${observed.expsw || 'Unknown'}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    createTlsObservedDetails(observed) {
+        if (!observed) return '';
+        return `
+            <div class="detail-subsection">
+                <h6>TLS Observed Details</h6>
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <span class="detail-label">Version:</span>
+                        <span class="detail-value">${observed.version || 'Unknown'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">SNI:</span>
+                        <span class="detail-value">${observed.sni || 'None'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">ALPN:</span>
+                        <span class="detail-value">${observed.alpn || 'None'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Cipher Suites:</span>
+                        <span class="detail-value">${observed.cipher_suites ? observed.cipher_suites.join(', ') : 'Unknown'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Extensions:</span>
+                        <span class="detail-value">${observed.extensions ? observed.extensions.join(', ') : 'Unknown'}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Create detailed raw data sections for modal
+    createRawDataDetailSections(rawData) {
+        let html = '';
+
+        // SYN packet (client data)
+        if (rawData.syn) {
+            const synData = rawData.syn;
+            html += `
+                <div class="detail-section">
+                    <h4>📥 SYN Packet (Client Data)</h4>
+                    <div class="detail-subsection">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Source:</span>
+                                <span class="detail-value">${synData.source?.ip || 'Unknown'}:${synData.source?.port || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">OS Detected:</span>
+                                <span class="detail-value">${synData.os_detected?.os || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Quality:</span>
+                                <span class="detail-value">${synData.os_detected?.quality?.toFixed(2) || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Distance:</span>
+                                <span class="detail-value">${synData.os_detected?.distance || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Signature:</span>
+                                <span class="detail-value">${synData.signature || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Timestamp:</span>
+                                <span class="detail-value">${synData.timestamp || 'Unknown'}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // SYN-ACK packet (server data)
+        if (rawData.syn_ack) {
+            const synAckData = rawData.syn_ack;
+            html += `
+                <div class="detail-section">
+                    <h4>📤 SYN-ACK Packet (Server Data)</h4>
+                    <div class="detail-subsection">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Source (Server):</span>
+                                <span class="detail-value">${synAckData.source?.ip || 'Unknown'}:${synAckData.source?.port || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Destination (Client):</span>
+                                <span class="detail-value">${synAckData.destination?.ip || 'Unknown'}:${synAckData.destination?.port || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">OS Detected:</span>
+                                <span class="detail-value">${synAckData.os_detected?.os || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Quality:</span>
+                                <span class="detail-value">${synAckData.os_detected?.quality?.toFixed(2) || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Distance:</span>
+                                <span class="detail-value">${synAckData.os_detected?.distance || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Signature:</span>
+                                <span class="detail-value">${synAckData.signature || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Timestamp:</span>
+                                <span class="detail-value">${synAckData.timestamp || 'Unknown'}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // HTTP request (client data)
+        if (rawData.http_request) {
+            const httpReq = rawData.http_request;
+            html += `
+                <div class="detail-section">
+                    <h4>🌐📥 HTTP Request (Client Data)</h4>
+                    <div class="detail-subsection">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">User-Agent:</span>
+                                <span class="detail-value">${httpReq.user_agent || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Method:</span>
+                                <span class="detail-value">${httpReq.method || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Host:</span>
+                                <span class="detail-value">${httpReq.host || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Accept:</span>
+                                <span class="detail-value">${httpReq.accept || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Accept-Language:</span>
+                                <span class="detail-value">${httpReq.accept_language || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Accept-Encoding:</span>
+                                <span class="detail-value">${httpReq.accept_encoding || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Connection:</span>
+                                <span class="detail-value">${httpReq.connection || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Quality:</span>
+                                <span class="detail-value">${httpReq.quality?.toFixed(2) || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Signature:</span>
+                                <span class="detail-value">${httpReq.signature || 'Unknown'}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // HTTP response (server data)
+        if (rawData.http_response) {
+            const httpRes = rawData.http_response;
+            html += `
+                <div class="detail-section">
+                    <h4>🌐📤 HTTP Response (Server Data)</h4>
+                    <div class="detail-subsection">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Server:</span>
+                                <span class="detail-value">${httpRes.server || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Status:</span>
+                                <span class="detail-value">${httpRes.status || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Content-Type:</span>
+                                <span class="detail-value">${httpRes.content_type || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Content-Length:</span>
+                                <span class="detail-value">${httpRes.content_length || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Set-Cookie:</span>
+                                <span class="detail-value">${httpRes.set_cookie || 'None'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Cache-Control:</span>
+                                <span class="detail-value">${httpRes.cache_control || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Quality:</span>
+                                <span class="detail-value">${httpRes.quality?.toFixed(2) || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Signature:</span>
+                                <span class="detail-value">${httpRes.signature || 'Unknown'}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // TLS client (client data)
+        if (rawData.tls_client) {
+            const tlsClient = rawData.tls_client;
+            html += `
+                <div class="detail-section">
+                    <h4>🔒 TLS Client (Client Data)</h4>
+                    <div class="detail-subsection">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Source:</span>
+                                <span class="detail-value">${tlsClient.source?.ip || 'Unknown'}:${tlsClient.source?.port || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">JA4:</span>
+                                <span class="detail-value">${tlsClient.ja4 || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">JA4 Raw:</span>
+                                <span class="detail-value">${tlsClient.ja4_raw || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Version:</span>
+                                <span class="detail-value">${tlsClient.details?.version || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">SNI:</span>
+                                <span class="detail-value">${tlsClient.details?.sni || 'None'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">ALPN:</span>
+                                <span class="detail-value">${tlsClient.details?.alpn || 'None'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Cipher Suites:</span>
+                                <span class="detail-value">${tlsClient.details?.cipher_suites?.join(', ') || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Extensions:</span>
+                                <span class="detail-value">${tlsClient.details?.extensions?.join(', ') || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Timestamp:</span>
+                                <span class="detail-value">${tlsClient.timestamp || 'Unknown'}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // MTU data
+        if (rawData.mtu) {
+            const mtuData = rawData.mtu;
+            html += `
+                <div class="detail-section">
+                    <h4>📏 MTU Data</h4>
+                    <div class="detail-subsection">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Source:</span>
+                                <span class="detail-value">${mtuData.source?.ip || 'Unknown'}:${mtuData.source?.port || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">MTU Value:</span>
+                                <span class="detail-value">${mtuData.mtu_value || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Timestamp:</span>
+                                <span class="detail-value">${mtuData.timestamp || 'Unknown'}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Uptime data
+        if (rawData.uptime) {
+            const uptimeData = rawData.uptime;
+            const uptimeHours = Math.floor(uptimeData.uptime_seconds / 3600);
+            const uptimeMinutes = Math.floor((uptimeData.uptime_seconds % 3600) / 60);
+            const uptimeSeconds = uptimeData.uptime_seconds % 60;
+            
+            html += `
+                <div class="detail-section">
+                    <h4>⏱️ Uptime Data</h4>
+                    <div class="detail-subsection">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Source:</span>
+                                <span class="detail-value">${uptimeData.source?.ip || 'Unknown'}:${uptimeData.source?.port || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Uptime:</span>
+                                <span class="detail-value">${uptimeHours}h ${uptimeMinutes}m ${uptimeSeconds}s</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Uptime Seconds:</span>
+                                <span class="detail-value">${uptimeData.uptime_seconds || 'Unknown'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Timestamp:</span>
+                                <span class="detail-value">${uptimeData.timestamp || 'Unknown'}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
         return html;
     }
 

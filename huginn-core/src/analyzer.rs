@@ -1,7 +1,9 @@
 use crate::error::{HuginnError, Result};
 use crate::events::{EventDispatcher, TrafficEvent};
 use crate::profile::{
-    HttpAnalysis, HttpDetails, TcpAnalysis, TcpDetails, TlsAnalysis, TlsDetails, TrafficProfile,
+    HttpAnalysis, HttpDetails, MtuData, NetworkEndpoint, OsDetection, SynAckPacketData,
+    SynPacketData, TcpAnalysis, TcpDetails, TlsAnalysis, TlsClientData, TlsDetails, TrafficProfile,
+    UptimeData,
 };
 use chrono::Utc;
 use huginn_net::fingerprint_result::*;
@@ -10,7 +12,7 @@ use huginn_net::ObservableTcp;
 use huginn_net::Ttl;
 use std::net::IpAddr;
 use std::str::FromStr;
-use tracing::debug;
+use tracing::{debug, info};
 
 /// Configuration for the Huginn analyzer
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -67,8 +69,8 @@ impl HuginnAnalyzer {
     /// Analyze a fingerprint result and return a traffic profile
     pub fn analyze(&self, result: FingerprintResult) -> Result<Option<TrafficProfile>> {
         // Debug logging to understand what huginn-net is sending
-        debug!(
-            "=== ANALYZING FingerprintResult ===\n  syn: {}\n  syn_ack: {}\n  http_request: {}\n  http_response: {}\n  tls_client: {}\n  mtu: {}\n  uptime: {}",
+        info!(
+            "🔍 ANALYZING FingerprintResult: SYN:{} SYN-ACK:{} HTTP-REQ:{} HTTP-RES:{} TLS:{} MTU:{} UPTIME:{}",
             result.syn.is_some(),
             result.syn_ack.is_some(),
             result.http_request.is_some(),
@@ -131,101 +133,144 @@ impl HuginnAnalyzer {
             );
         }
 
-        // Extract source IP and port from the result
-        let (ip, port) = match self.extract_ip_port(&result) {
-            Ok(ip_port) => {
-                debug!(
-                    "✅ Successfully extracted IP:port {}:{}",
-                    ip_port.0, ip_port.1
-                );
-                ip_port
+        // Extract primary IP from the result (for profile key - grouped by IP only, not port)
+        let ip = match self.extract_primary_ip(&result) {
+            Ok(ip) => {
+                info!("✅ Primary IP: {}", ip);
+                ip
             }
             Err(e) => {
-                debug!("❌ No valid IP/port found in result: {}", e);
+                info!("❌ No valid IP found in result: {}", e);
                 return Ok(None);
             }
         };
 
-        // Create or update traffic profile
-        let mut profile = TrafficProfile::new(ip, port);
+        // Create traffic profile (use port 0 as default since we group by IP only)
+        let mut profile = TrafficProfile::new(ip, 0);
 
-        // Analyze TCP if available and enabled
-        if self.config.enable_tcp {
-            if let Some(syn) = &result.syn {
-                debug!(
-                    "Processing SYN packet from {}:{}",
-                    syn.source.ip, syn.source.port
-                );
+        // Store the source IP in raw data for reference
+        profile.raw_data.source_ip = Some(ip.to_string());
+
+        // Process SYN packets (client data)
+        if let Some(syn) = &result.syn {
+            info!(
+                "📥 Processing SYN packet from {}:{} (CLIENT)",
+                syn.source.ip, syn.source.port
+            );
+            let syn_data = self.process_syn_packet(syn)?;
+            profile.raw_data.syn = Some(syn_data);
+
+            // Create legacy TCP client analysis for backwards compatibility
+            if self.config.enable_tcp {
                 if let Some(tcp_analysis) = self.analyze_tcp_syn(syn)? {
-                    profile.update_tcp(tcp_analysis);
-                    self.emit_tcp_event(&profile, &result.syn.as_ref().unwrap());
-                }
-            } else if let Some(syn_ack) = &result.syn_ack {
-                debug!(
-                    "Processing SYN-ACK packet to {}:{}",
-                    syn_ack.destination.ip, syn_ack.destination.port
-                );
-                if let Some(tcp_analysis) = self.analyze_tcp_syn_ack(syn_ack)? {
-                    profile.update_tcp(tcp_analysis);
-                    self.emit_tcp_event_syn_ack(&profile, &result.syn_ack.as_ref().unwrap());
+                    info!(
+                        "🔵 TCP CLIENT analysis: OS={}, Quality={:.2}",
+                        tcp_analysis.os, tcp_analysis.quality
+                    );
+                    profile.update_tcp_client(tcp_analysis.clone());
+                    profile.update_tcp(tcp_analysis); // Also update general tcp field for backwards compatibility
+                    self.emit_tcp_event(&profile, syn);
                 }
             }
         }
 
-        // Analyze HTTP if available and enabled
-        if self.config.enable_http {
-            // Analyze HTTP request if available
-            if let Some(http_req) = &result.http_request {
-                debug!(
-                    "Processing HTTP request from {}:{}",
-                    http_req.source.ip, http_req.source.port
-                );
+        // Process SYN-ACK packets (server data)
+        if let Some(syn_ack) = &result.syn_ack {
+            info!(
+                "📤 Processing SYN-ACK packet from {}:{} to {}:{} (SERVER)",
+                syn_ack.source.ip,
+                syn_ack.source.port,
+                syn_ack.destination.ip,
+                syn_ack.destination.port
+            );
+            let syn_ack_data = self.process_syn_ack_packet(syn_ack)?;
+            profile.raw_data.syn_ack = Some(syn_ack_data);
+
+            // Create legacy TCP server analysis for backwards compatibility
+            if self.config.enable_tcp {
+                if let Some(tcp_analysis) = self.analyze_tcp_syn_ack(syn_ack)? {
+                    info!(
+                        "🔶 TCP SERVER analysis: OS={}, Quality={:.2}",
+                        tcp_analysis.os, tcp_analysis.quality
+                    );
+                    profile.update_tcp_server(tcp_analysis.clone());
+                    // DON'T update general tcp field here to avoid overwriting client data
+                    self.emit_tcp_event_syn_ack(&profile, syn_ack);
+                }
+            }
+        }
+
+        // Process HTTP requests (client data)
+        if let Some(http_req) = &result.http_request {
+            info!(
+                "🌐📥 Processing HTTP request from {}:{} (CLIENT)",
+                http_req.source.ip, http_req.source.port
+            );
+            let http_req_data = self.process_http_request(http_req)?;
+            profile.raw_data.http_request = Some(http_req_data);
+
+            // Also create legacy HTTP analysis for backwards compatibility
+            if self.config.enable_http {
                 if let Some(http_analysis) = self.analyze_http_request(http_req)? {
                     profile.update_http(http_analysis);
-                    self.emit_http_event(&profile, &result.http_request.as_ref().unwrap());
-                }
-            }
-
-            // Analyze HTTP response if available (separate from request)
-            if let Some(http_res) = &result.http_response {
-                debug!(
-                    "Processing HTTP response to {}:{}",
-                    http_res.destination.ip, http_res.destination.port
-                );
-                if let Some(http_analysis) = self.analyze_http_response(http_res)? {
-                    profile.update_http(http_analysis);
-                    self.emit_http_event_response(
-                        &profile,
-                        &result.http_response.as_ref().unwrap(),
-                    );
+                    self.emit_http_event(&profile, http_req);
                 }
             }
         }
 
-        // Analyze TLS if available and enabled
-        if self.config.enable_tls {
-            if let Some(tls_client) = &result.tls_client {
-                debug!(
-                    "Processing TLS client from {}:{}",
-                    tls_client.source.ip, tls_client.source.port
-                );
+        // Process HTTP responses (server data)
+        if let Some(http_res) = &result.http_response {
+            info!(
+                "🌐📤 Processing HTTP response from {}:{} to {}:{} (SERVER)",
+                http_res.source.ip,
+                http_res.source.port,
+                http_res.destination.ip,
+                http_res.destination.port
+            );
+            let http_res_data = self.process_http_response(http_res)?;
+            profile.raw_data.http_response = Some(http_res_data);
+        }
+
+        // Process TLS client data
+        if let Some(tls_client) = &result.tls_client {
+            info!(
+                "🔒 Processing TLS client from {}:{}",
+                tls_client.source.ip, tls_client.source.port
+            );
+            let tls_data = self.process_tls_client(tls_client)?;
+            profile.raw_data.tls_client = Some(tls_data);
+
+            // Also create legacy TLS analysis for backwards compatibility
+            if self.config.enable_tls {
                 if let Some(tls_analysis) = self.analyze_tls_client(tls_client)? {
                     profile.update_tls(tls_analysis);
-                    self.emit_tls_event(&profile, &result.tls_client.as_ref().unwrap());
+                    self.emit_tls_event(&profile, tls_client);
                 }
             }
         }
 
-        // Check for MTU and uptime data
+        // Process MTU data
         if let Some(mtu) = &result.mtu {
-            debug!("Found MTU data from {}:{}", mtu.source.ip, mtu.source.port);
+            info!(
+                "📏 Processing MTU data from {}:{}",
+                mtu.source.ip, mtu.source.port
+            );
+            let mtu_data = self.process_mtu_data(mtu)?;
+            profile.raw_data.mtu = Some(mtu_data);
         }
+
+        // Process uptime data
         if let Some(uptime) = &result.uptime {
-            debug!(
-                "Found uptime data from {}:{}",
+            info!(
+                "⏱️ Processing uptime data from {}:{}",
                 uptime.source.ip, uptime.source.port
             );
+            let uptime_data = self.process_uptime_data(uptime)?;
+            profile.raw_data.uptime = Some(uptime_data);
         }
+
+        // Note: source_ip field doesn't exist in FingerprintResult
+        // Will be determined from the individual packet data
 
         // Only return profile if it has some data
         if profile.is_empty() {
@@ -243,56 +288,205 @@ impl HuginnAnalyzer {
         }
     }
 
-    /// Extract IP and port from fingerprint result
-    fn extract_ip_port(&self, result: &FingerprintResult) -> Result<(IpAddr, u16)> {
+    /// Extract primary IP from fingerprint result (for profile key - grouped by IP only)
+    fn extract_primary_ip(&self, result: &FingerprintResult) -> Result<IpAddr> {
         if let Some(syn) = &result.syn {
             // SYN packet: source is the client
-            debug!("Extracting IP/port from SYN packet");
+            debug!("Extracting IP from SYN packet");
             let ip = IpAddr::from_str(&syn.source.ip.to_string())
                 .map_err(|e| HuginnError::invalid_data(format!("Invalid IP: {}", e)))?;
-            Ok((ip, syn.source.port))
+            Ok(ip)
         } else if let Some(syn_ack) = &result.syn_ack {
             // SYN-ACK packet: destination is the client that initiated the connection
-            debug!("Extracting IP/port from SYN-ACK packet");
+            debug!("Extracting IP from SYN-ACK packet");
             let ip = IpAddr::from_str(&syn_ack.destination.ip.to_string())
                 .map_err(|e| HuginnError::invalid_data(format!("Invalid IP: {}", e)))?;
-            Ok((ip, syn_ack.destination.port))
+            Ok(ip)
         } else if let Some(http_req) = &result.http_request {
             // HTTP request: source is the client
-            debug!("Extracting IP/port from HTTP request");
+            debug!("Extracting IP from HTTP request");
             let ip = IpAddr::from_str(&http_req.source.ip.to_string())
                 .map_err(|e| HuginnError::invalid_data(format!("Invalid IP: {}", e)))?;
-            Ok((ip, http_req.source.port))
+            Ok(ip)
         } else if let Some(http_res) = &result.http_response {
             // HTTP response: destination is the client that made the request
-            debug!("Extracting IP/port from HTTP response");
+            debug!("Extracting IP from HTTP response");
             let ip = IpAddr::from_str(&http_res.destination.ip.to_string())
                 .map_err(|e| HuginnError::invalid_data(format!("Invalid IP: {}", e)))?;
-            Ok((ip, http_res.destination.port))
+            Ok(ip)
         } else if let Some(tls_client) = &result.tls_client {
             // TLS client: source is the client
-            debug!("Extracting IP/port from TLS client");
+            debug!("Extracting IP from TLS client");
             let ip = IpAddr::from_str(&tls_client.source.ip.to_string())
                 .map_err(|e| HuginnError::invalid_data(format!("Invalid IP: {}", e)))?;
-            Ok((ip, tls_client.source.port))
+            Ok(ip)
         } else if let Some(mtu) = &result.mtu {
             // MTU detection: source is the client
-            debug!("Extracting IP/port from MTU data");
+            debug!("Extracting IP from MTU data");
             let ip = IpAddr::from_str(&mtu.source.ip.to_string())
                 .map_err(|e| HuginnError::invalid_data(format!("Invalid IP: {}", e)))?;
-            Ok((ip, mtu.source.port))
+            Ok(ip)
         } else if let Some(uptime) = &result.uptime {
             // Uptime detection: source is the client
-            debug!("Extracting IP/port from uptime data");
+            debug!("Extracting IP from uptime data");
             let ip = IpAddr::from_str(&uptime.source.ip.to_string())
                 .map_err(|e| HuginnError::invalid_data(format!("Invalid IP: {}", e)))?;
-            Ok((ip, uptime.source.port))
+            Ok(ip)
         } else {
             debug!("No valid data found in FingerprintResult");
-            Err(HuginnError::invalid_data(
-                "No valid IP/port found in result",
-            ))
+            Err(HuginnError::invalid_data("No valid IP found in result"))
         }
+    }
+
+    // New methods for processing raw fingerprint data
+
+    /// Process SYN packet data
+    fn process_syn_packet(&self, syn: &SynTCPOutput) -> Result<SynPacketData> {
+        let os_detected = syn.os_matched.as_ref().map(|m| OsDetection {
+            os: self.extract_os_string(&m.os),
+            quality: m.quality as f64,
+            distance: self.extract_distance(&syn.sig.ittl),
+        });
+
+        Ok(SynPacketData {
+            source: NetworkEndpoint {
+                ip: syn.source.ip.to_string(),
+                port: syn.source.port,
+            },
+            os_detected,
+            signature: syn.sig.to_string(),
+            details: self.convert_tcp_details(&syn.sig),
+            timestamp: Utc::now(),
+        })
+    }
+
+    /// Process SYN-ACK packet data
+    fn process_syn_ack_packet(&self, syn_ack: &SynAckTCPOutput) -> Result<SynAckPacketData> {
+        let os_detected = syn_ack.os_matched.as_ref().map(|m| OsDetection {
+            os: self.extract_os_string(&m.os),
+            quality: m.quality as f64,
+            distance: self.extract_distance(&syn_ack.sig.ittl),
+        });
+
+        Ok(SynAckPacketData {
+            source: NetworkEndpoint {
+                ip: syn_ack.source.ip.to_string(),
+                port: syn_ack.source.port,
+            },
+            destination: NetworkEndpoint {
+                ip: syn_ack.destination.ip.to_string(),
+                port: syn_ack.destination.port,
+            },
+            os_detected,
+            signature: syn_ack.sig.to_string(),
+            details: self.convert_tcp_details(&syn_ack.sig),
+            timestamp: Utc::now(),
+        })
+    }
+
+    /// Process HTTP request data
+    fn process_http_request(
+        &self,
+        http_req: &HttpRequestOutput,
+    ) -> Result<crate::profile::HttpRequestData> {
+        let horder_strings: Vec<String> =
+            http_req.sig.horder.iter().map(|h| h.to_string()).collect();
+
+        Ok(crate::profile::HttpRequestData {
+            user_agent: self.extract_header_value_from_horder(&horder_strings, "user-agent"),
+            accept: self.extract_header_value_from_horder(&horder_strings, "accept"),
+            accept_language: self
+                .extract_header_value_from_horder(&horder_strings, "accept-language"),
+            accept_encoding: self
+                .extract_header_value_from_horder(&horder_strings, "accept-encoding"),
+            connection: self.extract_header_value_from_horder(&horder_strings, "connection"),
+            method: Some("GET".to_string()),
+            host: self.extract_header_value_from_horder(&horder_strings, "host"),
+            signature: http_req.sig.to_string(),
+            quality: http_req
+                .browser_matched
+                .as_ref()
+                .map(|m| m.quality as f64)
+                .unwrap_or(0.0),
+        })
+    }
+
+    /// Process HTTP response data
+    fn process_http_response(
+        &self,
+        http_res: &HttpResponseOutput,
+    ) -> Result<crate::profile::HttpResponseData> {
+        let horder_strings: Vec<String> =
+            http_res.sig.horder.iter().map(|h| h.to_string()).collect();
+
+        Ok(crate::profile::HttpResponseData {
+            server: self.extract_header_value_from_horder(&horder_strings, "server"),
+            content_type: self.extract_header_value_from_horder(&horder_strings, "content-type"),
+            content_length: self
+                .extract_header_value_from_horder(&horder_strings, "content-length"),
+            set_cookie: self.extract_header_value_from_horder(&horder_strings, "set-cookie"),
+            cache_control: self.extract_header_value_from_horder(&horder_strings, "cache-control"),
+            status: Some("200".to_string()),
+            signature: http_res.sig.to_string(),
+            quality: http_res
+                .web_server_matched
+                .as_ref()
+                .map(|m| m.quality as f64)
+                .unwrap_or(0.0),
+        })
+    }
+
+    /// Process TLS client data
+    fn process_tls_client(&self, tls_client: &TlsClientOutput) -> Result<TlsClientData> {
+        let details = TlsDetails {
+            version: tls_client.sig.version.to_string(),
+            sni: tls_client.sig.sni.as_ref().map(|s| s.to_string()),
+            alpn: tls_client.sig.alpn.as_ref().map(|s| s.to_string()),
+            cipher_suites: tls_client.sig.cipher_suites.clone(),
+            extensions: tls_client.sig.extensions.clone(),
+            signature_algorithms: tls_client.sig.signature_algorithms.clone(),
+            elliptic_curves: tls_client.sig.elliptic_curves.clone(),
+        };
+
+        Ok(TlsClientData {
+            source: NetworkEndpoint {
+                ip: tls_client.source.ip.to_string(),
+                port: tls_client.source.port,
+            },
+            ja4: tls_client.sig.ja4.full.value().to_string(),
+            ja4_raw: tls_client.sig.ja4.raw.value().to_string(),
+            details,
+            timestamp: Utc::now(),
+        })
+    }
+
+    /// Process MTU data
+    fn process_mtu_data(&self, mtu: &MTUOutput) -> Result<MtuData> {
+        Ok(MtuData {
+            source: NetworkEndpoint {
+                ip: mtu.source.ip.to_string(),
+                port: mtu.source.port,
+            },
+            mtu_value: mtu.mtu,
+            timestamp: Utc::now(),
+        })
+    }
+
+    /// Process uptime data
+    fn process_uptime_data(&self, uptime: &UptimeOutput) -> Result<UptimeData> {
+        // Calculate total seconds from available fields
+        let total_seconds = (uptime.days as u64 * 24 * 3600)
+            + (uptime.hours as u64 * 3600)
+            + (uptime.min as u64 * 60);
+
+        Ok(UptimeData {
+            source: NetworkEndpoint {
+                ip: uptime.source.ip.to_string(),
+                port: uptime.source.port,
+            },
+            uptime_seconds: total_seconds,
+            timestamp: Utc::now(),
+        })
     }
 
     /// Analyze TCP SYN packet

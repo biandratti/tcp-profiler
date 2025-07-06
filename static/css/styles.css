@@ -376,6 +376,47 @@ body {
     background: #ebf8ff;
 }
 
+/* Raw data section styles */
+.data-section.syn-client {
+    border-left-color: #48bb78;
+    background: #f0fff4;
+}
+
+.data-section.syn-server {
+    border-left-color: #ed8936;
+    background: #fffaf0;
+}
+
+.data-section.http-client {
+    border-left-color: #4299e1;
+    background: #ebf8ff;
+}
+
+.data-section.http-server {
+    border-left-color: #9f7aea;
+    background: #faf5ff;
+}
+
+.data-section.tls-client {
+    border-left-color: #e53e3e;
+    background: #fff5f5;
+}
+
+.data-section.mtu-data {
+    border-left-color: #38b2ac;
+    background: #e6fffa;
+}
+
+.data-section.uptime-data {
+    border-left-color: #d69e2e;
+    background: #fffff0;
+}
+
+.data-section.tcp-summary {
+    border-left-color: #805ad5;
+    background: #faf5ff;
+}
+
 .data-title {
     font-size: 0.875rem;
     font-weight: 600;
@@ -627,6 +668,24 @@ body {
     border: 1px solid #e2e8f0;
     word-break: break-all;
     white-space: pre-wrap;
+}
+
+/* Detail subsections for raw data */
+.detail-subsection {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.detail-subsection h5 {
+    color: #2d3748;
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #e2e8f0;
 }
 
 /* Responsive Design */
