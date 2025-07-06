@@ -88,12 +88,16 @@ impl HuginnAnalyzer {
 
         // Analyze HTTP if available and enabled
         if self.config.enable_http {
+            // Analyze HTTP request if available
             if let Some(http_req) = &result.http_request {
                 if let Some(http_analysis) = self.analyze_http_request(http_req)? {
                     profile.update_http(http_analysis);
                     self.emit_http_event(&profile, &result.http_request.as_ref().unwrap());
                 }
-            } else if let Some(http_res) = &result.http_response {
+            }
+
+            // Analyze HTTP response if available (separate from request)
+            if let Some(http_res) = &result.http_response {
                 if let Some(http_analysis) = self.analyze_http_response(http_res)? {
                     profile.update_http(http_analysis);
                     self.emit_http_event_response(
@@ -254,6 +258,24 @@ impl HuginnAnalyzer {
             expected_software: http_req.sig.expsw.clone(),
         };
 
+        // Extract request-specific data from headers
+        let horder_strings: Vec<String> =
+            http_req.sig.horder.iter().map(|h| h.to_string()).collect();
+
+        let request_data = crate::profile::HttpRequestData {
+            user_agent: self.extract_header_value_from_horder(&horder_strings, "user-agent"),
+            accept: self.extract_header_value_from_horder(&horder_strings, "accept"),
+            accept_language: self
+                .extract_header_value_from_horder(&horder_strings, "accept-language"),
+            accept_encoding: self
+                .extract_header_value_from_horder(&horder_strings, "accept-encoding"),
+            connection: self.extract_header_value_from_horder(&horder_strings, "connection"),
+            method: Some("GET".to_string()), // Default, could be extracted from signature
+            host: self.extract_header_value_from_horder(&horder_strings, "host"),
+            signature: http_req.sig.to_string(),
+            quality,
+        };
+
         Ok(Some(HttpAnalysis {
             browser,
             quality,
@@ -261,6 +283,8 @@ impl HuginnAnalyzer {
             diagnosis: http_req.diagnosis.to_string(),
             signature: http_req.sig.to_string(),
             details,
+            request: Some(request_data),
+            response: None,
         }))
     }
 
@@ -301,6 +325,22 @@ impl HuginnAnalyzer {
             expected_software: http_res.sig.expsw.clone(),
         };
 
+        // Extract response-specific data from headers
+        let horder_strings: Vec<String> =
+            http_res.sig.horder.iter().map(|h| h.to_string()).collect();
+
+        let response_data = crate::profile::HttpResponseData {
+            server: self.extract_header_value_from_horder(&horder_strings, "server"),
+            content_type: self.extract_header_value_from_horder(&horder_strings, "content-type"),
+            content_length: self
+                .extract_header_value_from_horder(&horder_strings, "content-length"),
+            set_cookie: self.extract_header_value_from_horder(&horder_strings, "set-cookie"),
+            cache_control: self.extract_header_value_from_horder(&horder_strings, "cache-control"),
+            status: Some("200".to_string()), // Default, could be extracted from signature
+            signature: http_res.sig.to_string(),
+            quality,
+        };
+
         Ok(Some(HttpAnalysis {
             browser,
             quality,
@@ -308,6 +348,8 @@ impl HuginnAnalyzer {
             diagnosis: http_res.diagnosis.to_string(),
             signature: http_res.sig.to_string(),
             details,
+            request: None,
+            response: Some(response_data),
         }))
     }
 
@@ -364,6 +406,30 @@ impl HuginnAnalyzer {
             parts.push(variant.clone());
         }
         parts.join(" ")
+    }
+
+    /// Extract header value from horder field
+    /// horder contains strings like "user-agent=[Mozilla/5.0...]" or "content-type=[application/json]"
+    fn extract_header_value_from_horder(
+        &self,
+        horder: &[String],
+        header_name: &str,
+    ) -> Option<String> {
+        for header in horder {
+            if let Some(eq_pos) = header.find('=') {
+                let (name, value_part) = header.split_at(eq_pos);
+                if name.to_lowercase() == header_name.to_lowercase() {
+                    // Remove the '=' and extract value between brackets
+                    let value_part = &value_part[1..]; // Remove '='
+                    if value_part.starts_with('[') && value_part.ends_with(']') {
+                        return Some(value_part[1..value_part.len() - 1].to_string());
+                    } else {
+                        return Some(value_part.to_string());
+                    }
+                }
+            }
+        }
+        None
     }
 
     fn extract_distance(&self, ttl: &Ttl) -> u8 {

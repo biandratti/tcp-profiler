@@ -39,7 +39,7 @@ pub struct TcpAnalysis {
 /// HTTP request/response analysis
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HttpAnalysis {
-    /// Browser detection
+    /// Browser/server detection
     pub browser: String,
     /// Detection quality/confidence
     pub quality: f64,
@@ -51,6 +51,54 @@ pub struct HttpAnalysis {
     pub signature: String,
     /// Detailed HTTP characteristics
     pub details: HttpDetails,
+    /// Request-specific data (from client)
+    pub request: Option<HttpRequestData>,
+    /// Response-specific data (from server)
+    pub response: Option<HttpResponseData>,
+}
+
+/// HTTP request data (from client)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HttpRequestData {
+    /// User-Agent header
+    pub user_agent: Option<String>,
+    /// Accept headers
+    pub accept: Option<String>,
+    /// Accept-Language header
+    pub accept_language: Option<String>,
+    /// Accept-Encoding header
+    pub accept_encoding: Option<String>,
+    /// Connection type
+    pub connection: Option<String>,
+    /// Request method
+    pub method: Option<String>,
+    /// Host header
+    pub host: Option<String>,
+    /// Request signature
+    pub signature: String,
+    /// Quality score for request analysis
+    pub quality: f64,
+}
+
+/// HTTP response data (from server)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HttpResponseData {
+    /// Server header
+    pub server: Option<String>,
+    /// Content-Type header
+    pub content_type: Option<String>,
+    /// Content-Length header
+    pub content_length: Option<String>,
+    /// Set-Cookie headers
+    pub set_cookie: Option<String>,
+    /// Cache-Control header
+    pub cache_control: Option<String>,
+    /// Response status
+    pub status: Option<String>,
+    /// Response signature
+    pub signature: String,
+    /// Quality score for response analysis
+    pub quality: f64,
 }
 
 /// TLS connection analysis
@@ -144,7 +192,26 @@ impl TrafficProfile {
 
     /// Update the profile with HTTP analysis
     pub fn update_http(&mut self, http: HttpAnalysis) {
-        self.http = Some(http);
+        if let Some(existing_http) = &mut self.http {
+            // Merge request and response data
+            if http.request.is_some() {
+                existing_http.request = http.request;
+            }
+            if http.response.is_some() {
+                existing_http.response = http.response;
+            }
+            // Update other fields if they have better quality
+            if http.quality > existing_http.quality {
+                existing_http.browser = http.browser;
+                existing_http.quality = http.quality;
+                existing_http.language = http.language;
+                existing_http.diagnosis = http.diagnosis;
+                existing_http.signature = http.signature;
+                existing_http.details = http.details;
+            }
+        } else {
+            self.http = Some(http);
+        }
         self.update_metadata();
     }
 
