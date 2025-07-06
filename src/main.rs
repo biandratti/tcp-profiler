@@ -1,5 +1,7 @@
 use axum::http::HeaderMap;
 use axum::{extract::ConnectInfo, response::Json, routing::get, Router};
+use axum_server_dual_protocol::axum_server::tls_rustls::RustlsConfig;
+use axum_server_dual_protocol::{bind_dual_protocol, ServerExt};
 use clap::Parser;
 use huginn_net::fingerprint_result::{
     Browser, HttpRequestOutput, HttpResponseOutput, MTUOutput, OperativeSystem, SynAckTCPOutput,
@@ -18,13 +20,22 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::RwLock;
 use tower_http::services::fs::ServeDir;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
     #[arg(short = 'i', long)]
     interface: String,
+
+    #[arg(long, help = "Path to TLS certificate file (PEM format)")]
+    cert: Option<String>,
+
+    #[arg(long, help = "Path to TLS private key file (PEM format)")]
+    key: Option<String>,
+
+    #[arg(long, help = "Enable HTTP to HTTPS upgrade", default_value = "false")]
+    upgrade: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -471,6 +482,8 @@ async fn main() {
                     http_res.destination.ip.to_string(),
                     http_res.destination.port,
                 )
+            } else if let Some(tls_client) = &output.tls_client {
+                (tls_client.source.ip.to_string(), tls_client.source.port)
             } else {
                 continue;
             };
@@ -534,14 +547,57 @@ async fn main() {
         .fallback_service(ServeDir::new("static"));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-    info!("Server running on http://{}", addr);
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    match (&args.cert, &args.key) {
+        (Some(cert_path), Some(key_path)) => {
+            info!("Starting server with TLS support on {}", addr);
+            info!("Certificate: {}", cert_path);
+            info!("Private key: {}", key_path);
 
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await
-    .unwrap();
+            // Load TLS configuration
+            let config = match RustlsConfig::from_pem_file(cert_path, key_path).await {
+                Ok(config) => config,
+                Err(e) => {
+                    error!("Failed to load TLS configuration: {}", e);
+                    warn!("Falling back to HTTP-only mode");
+
+                    info!("Server running on http://{}", addr);
+                    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+                    axum::serve(
+                        listener,
+                        app.into_make_service_with_connect_info::<SocketAddr>(),
+                    )
+                    .await
+                    .unwrap();
+                    return;
+                }
+            };
+
+            let mut server = bind_dual_protocol(addr, config);
+
+            if args.upgrade {
+                info!("HTTP to HTTPS upgrade enabled");
+                server = server.set_upgrade(true);
+            }
+
+            server
+                .serve(app.into_make_service_with_connect_info::<SocketAddr>())
+                .await
+                .unwrap();
+        }
+        _ => {
+            warn!(
+                "No TLS certificates provided, running HTTP-only server on {}",
+                addr
+            );
+
+            let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+            axum::serve(
+                listener,
+                app.into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .await
+            .unwrap();
+        }
+    }
 }
