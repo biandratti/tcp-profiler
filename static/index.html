@@ -231,7 +231,7 @@
                 valueContent = JSON.stringify(value);
             }
             
-            const isHighlighted = ['syn', 'syn_ack', 'uptime', 'mtu', 'http_request', 'http_response'].includes(key);
+            const isHighlighted = ['syn', 'syn_ack', 'uptime', 'mtu', 'http_request', 'http_response', 'tls_client'].includes(key);
             const propertyClass = isHighlighted ? 'highlighted-property' : '';
             const valueClass = isHighlighted ? 'highlighted-value' : '';
             

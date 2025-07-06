@@ -482,6 +482,39 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 
 [[package]]
+name = "huginn-net"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9593fd7fd7cbd284c6d9afed60b26633f2431b4418d10dbacdbb93fb247ebc7f"
+dependencies = [
+ "crossbeam",
+ "httparse",
+ "lazy_static",
+ "nom 8.0.0",
+ "pcap-file",
+ "pnet",
+ "sha2",
+ "thiserror 2.0.12",
+ "tls-parser",
+ "tracing",
+ "ttl_cache",
+]
+
+[[package]]
+name = "huginn-net-profiler"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "clap",
+ "huginn-net",
+ "serde",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "hyper"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -756,25 +789,6 @@ dependencies = [
  "redox_syscall",
  "smallvec",
  "windows-targets",
-]
-
-[[package]]
-name = "passivetcp-rs"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7b57f09dd53a718ab8d64c39ae049146ed9a181458d73e52f4f6368bb45ef27"
-dependencies = [
- "crossbeam",
- "httparse",
- "lazy_static",
- "nom 8.0.0",
- "pcap-file",
- "pnet",
- "sha2",
- "thiserror 2.0.12",
- "tls-parser",
- "tracing",
- "ttl_cache",
 ]
 
 [[package]]
@@ -1187,20 +1201,6 @@ name = "sync_wrapper"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
-
-[[package]]
-name = "tcp-profiler"
-version = "0.1.0"
-dependencies = [
- "axum",
- "clap",
- "passivetcp-rs",
- "serde",
- "tokio",
- "tower-http",
- "tracing",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "thiserror"
