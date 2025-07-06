@@ -4,24 +4,27 @@ WORKDIR /usr/src/app
 COPY . .
 
 RUN apt-get update && \
-    apt-get install -y pkg-config libssl-dev && \
+    apt-get install -y pkg-config libssl-dev libpcap-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-RUN cargo build --release
+# Build the huginn-api binary
+RUN cargo build --release --bin huginn-api
 
 FROM debian:bookworm-slim
 
 WORKDIR /app
 
 RUN apt-get update && \
-    apt-get install -y libssl-dev ca-certificates && \
+    apt-get install -y libssl-dev libpcap-dev ca-certificates && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /usr/src/app/target/release/tcp-profiler /app/
+# Copy the huginn-api binary instead of tcp-profiler
+COPY --from=builder /usr/src/app/target/release/huginn-api /app/
 COPY --from=builder /usr/src/app/static /app/static
 
-EXPOSE 8080
+EXPOSE 3000
 
-CMD ["./tcp-profiler"]
+# Run huginn-api with default interface
+CMD ["./huginn-api", "--interface", "eth0"]

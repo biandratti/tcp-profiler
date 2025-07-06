@@ -3,322 +3,154 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TCP Profiler</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-        }
-        input {
-            width: 100%;
-            padding: 8px;
-            box-sizing: border-box;
-        }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 15px;
-            border: none;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        pre {
-            background-color: #f5f5f5;
-            padding: 15px;
-            overflow: auto;
-        }
-        .optional {
-            color: #666;
-            font-size: 0.9em;
-            font-style: italic;
-        }
-        .search-button {
-            background-color: #333;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            padding: 0;
-            position: fixed;
-            right: 20px;
-            top: 20px;
-            z-index: 1000;
-        }
-        .search-button:hover {
-            background-color: #000;
-        }
-        .search-icon {
-            width: 20px;
-            height: 20px;
-            fill: white;
-            opacity: 0.9;
-        }
-        .scan-button {
-            background-color: white;
-            margin-top: 15px;
-            font-size: 1.2em;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            padding: 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: transform 0.2s, box-shadow 0.2s;
-            border: 1px solid #e0e0e0;
-            position: relative;
-            overflow: hidden;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .scan-button:active {
-            transform: scale(0.95);
-        }
-        .scan-button::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #f5f5f5;
-            border-radius: 50%;
-            transform: scale(0);
-            transition: transform 0.2s;
-            z-index: -1;
-        }
-        .scan-button:hover::before {
-            transform: scale(1.05);
-        }
-        .scan-button:hover {
-            transform: scale(1.05);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-        }
-        .scan-icon {
-            width: 32px;
-            height: 32px;
-            fill: #333;
-            opacity: 0.9;
-        }
-        .fingerprint-icon {
-            width: 32px;
-            height: 32px;
-            fill: white;
-            opacity: 0.9;
-        }
-        .optional-fields {
-            display: none;
-            margin-top: 15px;
-            padding: 15px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            position: relative;
-            padding-right: 60px;
-        }
-        .profile-container {
-            margin-top: 20px;
-            width: 100%;
-            overflow-x: auto;
-        }
-        .profile-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-            background: white;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            table-layout: fixed;
-        }
-        .profile-table td {
-            padding: 12px 15px;
-            border-bottom: 1px solid #e0e0e0;
-            color: #666;
-            font-family: monospace;
-            word-break: break-all;
-            vertical-align: top;
-        }
-        .profile-table td:first-child {
-            width: 120px;
-            min-width: 120px;
-            max-width: 120px;
-            white-space: nowrap;
-            padding-right: 20px;
-        }
-        .profile-table td:last-child {
-            padding-left: 20px;
-        }
-        .profile-table tr:last-child td {
-            border-bottom: none;
-        }
-        .profile-table tr:hover {
-            background: #f9f9f9;
-        }
-        .highlighted-property {
-            color: #0D47A1;
-            font-size: 1.1em;
-            font-weight: bold;
-        }
-        .highlighted-value {
-            color: #0D47A1;
-            font-size: 1.1em;
-        }
-    </style>
+    <title>🦉 Huginn Network Profiler</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦉</text></svg>">
 </head>
 <body>
-    <h1>TCP Profiler</h1>
-    <button class="search-button" onclick="toggleSearch()" title="Search Profile">
-        <svg class="search-icon" viewBox="0 0 24 24">
-            <path d="M10.5 3a7.5 7.5 0 015.645 12.438l4.709 4.708a1 1 0 01-1.414 1.414l-4.708-4.709A7.5 7.5 0 1110.5 3zm0 2a5.5 5.5 0 100 11 5.5 5.5 0 000-11z"/>
-        </svg>
-    </button>
-    <div id="optionalFields" class="optional-fields">
-        <div class="form-group">
-            <label for="x-forwarded-for">X-Forwarded-For:</label>
-            <input type="text" id="x-forwarded-for" placeholder="Enter IP address">
-        </div>
-        <div class="form-group">
-            <label for="x-remote-port">X-Remote-Port:</label>
-            <input type="text" id="x-remote-port" placeholder="Enter port number">
-        </div>
-        <button id="searchProfileBtn" onclick="searchProfile()">Search</button>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">🦉</span>
+                    <h1>Huginn Network Profiler</h1>
+                </div>
+                <div class="header-controls">
+                    <div class="connection-status" id="connectionStatus">
+                        <span class="status-indicator" id="statusIndicator"></span>
+                        <span id="statusText">Connecting...</span>
+                    </div>
+                    <button id="toggleConnection" class="btn btn-primary">Connect</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Stats Dashboard -->
+        <section class="stats-section">
+            <div class="container">
+                <h2>Live Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">📊</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="totalProfiles">0</div>
+                            <div class="stat-label">Total Profiles</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🔌</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="tcpProfiles">0</div>
+                            <div class="stat-label">TCP Profiles</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🌐</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="httpProfiles">0</div>
+                            <div class="stat-label">HTTP Profiles</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🔒</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="tlsProfiles">0</div>
+                            <div class="stat-label">TLS Profiles</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">✅</div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="completeProfiles">0</div>
+                            <div class="stat-label">Complete Profiles</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Controls -->
+        <section class="controls-section">
+            <div class="container">
+                <div class="controls-bar">
+                    <div class="search-box">
+                        <input type="text" id="searchInput" placeholder="Search profiles by IP, OS, browser..." class="search-input">
+                        <button id="searchBtn" class="btn btn-secondary">🔍 Search</button>
+                    </div>
+                    <div class="filter-controls">
+                        <select id="filterType" class="filter-select">
+                            <option value="all">All Profiles</option>
+                            <option value="tcp">TCP Only</option>
+                            <option value="http">HTTP Only</option>
+                            <option value="tls">TLS Only</option>
+                            <option value="complete">Complete Profiles</option>
+                        </select>
+                        <button id="clearProfiles" class="btn btn-danger">🗑️ Clear All</button>
+                        <button id="refreshProfiles" class="btn btn-secondary">🔄 Refresh</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Profiles Display -->
+        <section class="profiles-section">
+            <div class="container">
+                <div class="profiles-header">
+                    <h2>Traffic Profiles</h2>
+                    <div class="profiles-count">
+                        <span id="profilesCount">0 profiles</span>
+                    </div>
+                </div>
+                
+                <div class="profiles-container">
+                    <div id="profilesList" class="profiles-list">
+                        <!-- Profiles will be dynamically inserted here -->
+                    </div>
+                    
+                    <div id="emptyState" class="empty-state">
+                        <div class="empty-icon">🦉</div>
+                        <h3>No Traffic Profiles Yet</h3>
+                        <p>Start the network collector to see live traffic analysis.</p>
+                        <div class="empty-actions">
+                            <button id="startCollector" class="btn btn-primary">Start Monitoring</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Live Activity Feed -->
+        <section class="activity-section">
+            <div class="container">
+                <div class="activity-header">
+                    <h3>Live Activity</h3>
+                    <button id="clearActivity" class="btn btn-sm btn-secondary">Clear</button>
+                </div>
+                <div class="activity-feed" id="activityFeed">
+                    <!-- Activity items will be added here -->
+                </div>
+            </div>
+        </section>
     </div>
-    <div class="profile-container">
-        <div id="requestIp" style="margin-bottom: 10px; color: #0D47A1; font-weight: bold;"></div>
-        <table class="profile-table">
-            <tbody id="profileResponse"></tbody>
-        </table>
+
+    <!-- Profile Detail Modal -->
+    <div id="profileModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Profile Details</h3>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Profile details will be inserted here -->
+            </div>
+        </div>
     </div>
 
-    <script>
-        function toggleSearch() {
-            const optionalFields = document.getElementById('optionalFields');
-            optionalFields.style.display = optionalFields.style.display === 'none' ? 'block' : 'none';
-        }
-
-        function createTableRow(key, value) {
-            if (key === 'source_ip') return null;
-            const row = document.createElement('tr');
-            let valueContent = '';
-            
-            if (typeof value === 'object' && value !== null) {
-                valueContent = Object.entries(value)
-                    .map(([k, v]) => { 
-                        if (k === 'observed' && typeof v === 'object' && v !== null) {
-                            const signatureObserved = Object.entries(v)
-                                .map(([sigKey, sigValue]) => `&nbsp;&nbsp;&nbsp;&nbsp;<span style="font-weight: bold; color: #3F51B5;">${sigKey}</span>: ${JSON.stringify(sigValue)}`)
-                                .join('<br>');
-                            return `<span style="color: #0D47A1; font-weight: bold;">"${k}"</span>:<br>${signatureObserved}`;
-                        } else {
-                            return `<span style="color: #0D47A1; font-weight: bold;">"${k}"</span>: ${JSON.stringify(v)}`;
-                        }
-                    })
-                    .join('<br>');
-            } else {
-                valueContent = JSON.stringify(value);
-            }
-            
-            const isHighlighted = ['syn', 'syn_ack', 'uptime', 'mtu', 'http_request', 'http_response', 'tls_client'].includes(key);
-            const propertyClass = isHighlighted ? 'highlighted-property' : '';
-            const valueClass = isHighlighted ? 'highlighted-value' : '';
-            
-            row.innerHTML = `
-                <td class="${propertyClass}">${key}</td>
-                <td class="${valueClass}">${valueContent}</td>
-            `;
-            return row;
-        }
-
-        async function fetchTcpInfoOnLoad() {
-            try {
-                const response = await fetch('/tcp-info', {
-                    method: 'GET'
-                });
-                const data = await response.json();
-                const profileResponse = document.getElementById('profileResponse');
-                profileResponse.innerHTML = '';
-                const requestIpDiv = document.getElementById('requestIp');
-                let ip = (data && data.source_ip) ? data.source_ip : '';
-                requestIpDiv.textContent = ip ? `Profile for IP: ${ip}` : '';
-                if (data && typeof data === 'object' && Object.keys(data).length > 0) {
-                    for (const [key, value] of Object.entries(data)) {
-                        const row = createTableRow(key, value);
-                        if (row) profileResponse.appendChild(row);
-                    }
-                } else {
-                    const errorRow = createTableRow(
-                        'No Data',
-                        'No TCP profile data available for your connection. Try scanning or refreshing the page.'
-                    );
-                    profileResponse.appendChild(errorRow);
-                }
-            } catch (error) {
-                const profileResponse = document.getElementById('profileResponse');
-                profileResponse.innerHTML = '';
-                const errorRow = createTableRow('Error', error.message);
-                profileResponse.appendChild(errorRow);
-                console.error('Error fetching TCP info:', error);
-            }
-        }
-
-        async function searchProfile() {
-            const xForwardedFor = document.getElementById('x-forwarded-for').value;
-            const xRemotePort = document.getElementById('x-remote-port').value;
-
-            const headers = {};
-            if (xForwardedFor) {
-                headers['X-Forwarded-For'] = xForwardedFor;
-            }
-            if (xRemotePort) {
-                headers['X-Remote-Port'] = xRemotePort;
-            }
-
-            try {
-                const response = await fetch('/tcp-info', {
-                    method: 'GET',
-                    headers: headers
-                });
-                const data = await response.json();
-                const profileResponse = document.getElementById('profileResponse');
-                profileResponse.innerHTML = '';
-                const requestIpDiv = document.getElementById('requestIp');
-                let ip = (data && data.source_ip) ? data.source_ip : '';
-                requestIpDiv.textContent = ip ? `Profile for IP: ${ip}` : '';
-                if (data && typeof data === 'object' && Object.keys(data).length > 0) {
-                    for (const [key, value] of Object.entries(data)) {
-                        const row = createTableRow(key, value);
-                        if (row) profileResponse.appendChild(row);
-                    }
-                } else {
-                    const errorRow = createTableRow(
-                        'No Data',
-                        'No TCP profile data available for your connection. Try scanning or refreshing the page.'
-                    );
-                    profileResponse.appendChild(errorRow);
-                }
-            } catch (error) {
-                const profileResponse = document.getElementById('profileResponse');
-                profileResponse.innerHTML = '';
-                const errorRow = createTableRow('Error', error.message);
-                profileResponse.appendChild(errorRow);
-                console.error('Error fetching TCP info:', error);
-            }
-        }
-
-        window.addEventListener('DOMContentLoaded', fetchTcpInfoOnLoad);
-    </script>
+    <!-- Scripts -->
+    <script src="js/websocket.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>

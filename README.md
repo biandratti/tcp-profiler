@@ -47,7 +47,7 @@ sudo RUST_LOG=info ./target/release/huginn-net-profiler --interface <interface> 
 
 #### With TLS and HTTP to HTTPS upgrade
 ```
-sudo RUST_LOG=info ./target/release/huginn-net-profiler --interface <interface> --cert cert.pem --key key.pem --upgrade
+sudo `RUST_LOG=info ./target/release/huginn-net-profiler` --interface <interface> --cert cert.pem --key key.pem --upgrade
 ```
 
 #### Generate self-signed certificates for testing

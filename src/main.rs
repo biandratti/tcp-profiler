@@ -1,26 +1,8 @@
-use axum::http::HeaderMap;
-use axum::{extract::ConnectInfo, response::Json, routing::get, Router};
-use axum_server_dual_protocol::axum_server::tls_rustls::RustlsConfig;
-use axum_server_dual_protocol::{bind_dual_protocol, ServerExt};
+// Legacy main.rs - Now redirects to huginn-api
+// This file is kept for backwards compatibility
+
 use clap::Parser;
-use huginn_net::fingerprint_result::{
-    Browser, HttpRequestOutput, HttpResponseOutput, MTUOutput, OperativeSystem, SynAckTCPOutput,
-    SynTCPOutput, TlsClientOutput, UptimeOutput, WebServer,
-};
-use huginn_net::{
-    db::Database,
-    tcp::{IpVersion, PayloadSize, WindowSize},
-    HuginnNet, ObservableTcp, ObservableTlsClient, Ttl,
-};
-use serde::Serialize;
-use std::collections::HashMap;
-use std::net::SocketAddr;
-use std::sync::mpsc as std_mpsc;
-use std::sync::Arc;
-use tokio::sync::mpsc;
-use tokio::sync::RwLock;
-use tower_http::services::fs::ServeDir;
-use tracing::{debug, error, info, warn};
+use std::process::Command;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -36,568 +18,57 @@ struct Args {
 
     #[arg(long, help = "Enable HTTP to HTTPS upgrade", default_value = "false")]
     upgrade: bool,
+
+    #[arg(long, help = "Port to run the server on", default_value = "3000")]
+    port: u16,
 }
 
-#[derive(Serialize, Clone)]
-struct TcpInfo {
-    syn: Option<SynAckTCP>,
-    syn_ack: Option<SynAckTCP>,
-    mtu: Option<Mtu>,
-    uptime: Option<Uptime>,
-    http_request: Option<HttpRequest>,
-    http_response: Option<HttpResponse>,
-    source_ip: Option<String>,
-    tls_client: Option<TlsClient>,
-}
-
-#[derive(Serialize, Clone)]
-struct Uptime {
-    time: String,
-    freq: String,
-}
-
-impl From<&UptimeOutput> for Uptime {
-    fn from(output: &UptimeOutput) -> Self {
-        Uptime {
-            time: format!(
-                "{} days, {} hrs, {} min (modulo {} days)",
-                output.days, output.hours, output.min, output.up_mod_days
-            ),
-            freq: format!("{:.2} Hz", output.freq),
-        }
-    }
-}
-
-#[derive(Serialize, Clone)]
-pub struct HttpObserved {
-    pub version: String,
-    pub horder: String,
-    pub habsent: String,
-    pub expsw: String,
-}
-
-#[derive(Serialize, Clone)]
-struct HttpRequest {
-    lang: Option<String>,
-    diagnosis: String,
-    browser: String,
-    quality: String,
-    signature: String,
-    observed: HttpObserved,
-}
-
-fn extract_browser(browser: Option<&Browser>) -> String {
-    if let Some(b) = browser {
-        let mut parts = vec![b.name.clone()];
-        if let Some(family) = &b.family {
-            parts.push(family.clone());
-        }
-        if let Some(variant) = &b.variant {
-            parts.push(variant.clone());
-        }
-        parts.join(" ")
-    } else {
-        String::new()
-    }
-}
-
-impl From<&HttpRequestOutput> for HttpRequest {
-    fn from(output: &HttpRequestOutput) -> Self {
-        let horder_str = output
-            .sig
-            .horder
-            .iter()
-            .map(|h| h.to_string())
-            .collect::<Vec<String>>()
-            .join(", ");
-
-        let habsent_str = output
-            .sig
-            .habsent
-            .iter()
-            .map(|h| h.to_string())
-            .collect::<Vec<String>>()
-            .join(", ");
-
-        let expsw_str = output.sig.expsw.clone();
-
-        let http_signature_observable = HttpObserved {
-            version: output.sig.version.to_string(),
-            horder: horder_str,
-            habsent: habsent_str,
-            expsw: expsw_str,
-        };
-
-        HttpRequest {
-            lang: output.lang.as_ref().map(|l| l.to_string()),
-            diagnosis: output.diagnosis.to_string(),
-            browser: extract_browser(output.browser_matched.as_ref().map(|l| &l.browser)),
-            quality: output
-                .browser_matched
-                .as_ref()
-                .map(|l| l.quality.to_string())
-                .unwrap_or_else(|| "0.00".to_string()),
-            signature: output.sig.to_string(),
-            observed: http_signature_observable,
-        }
-    }
-}
-
-#[derive(Serialize, Clone)]
-pub struct TlsClientObserved {
-    pub version: String,
-    pub sni: Option<String>,
-    pub alpn: Option<String>,
-    pub cipher_suites: Vec<u16>,
-    pub extensions: Vec<u16>,
-    pub signature_algorithms: Vec<u16>,
-    pub elliptic_curves: Vec<u16>,
-}
-
-#[derive(Serialize, Clone)]
-struct TlsClient {
-    ja4: String,
-    ja4_raw: String,
-    ja4_original: String,
-    ja4_original_raw: String,
-    observed: TlsClientObserved,
-}
-
-impl From<&TlsClientOutput> for TlsClient {
-    fn from(output: &TlsClientOutput) -> Self {
-        TlsClient {
-            ja4: output.sig.ja4.full.value().to_string(),
-            ja4_raw: output.sig.ja4.raw.value().to_string(),
-            ja4_original: output.sig.ja4_original.full.value().to_string(),
-            ja4_original_raw: output.sig.ja4_original.raw.value().to_string(),
-            observed: TlsClientObserved::from(&output.sig),
-        }
-    }
-}
-
-impl From<&ObservableTlsClient> for TlsClientObserved {
-    fn from(value: &ObservableTlsClient) -> Self {
-        TlsClientObserved {
-            version: value.version.to_string(),
-            sni: value.sni.as_ref().map(|l| l.to_string()),
-            alpn: value.alpn.as_ref().map(|l| l.to_string()),
-            cipher_suites: value.cipher_suites.clone(),
-            extensions: value.extensions.clone(),
-            signature_algorithms: value.signature_algorithms.clone(),
-            elliptic_curves: value.elliptic_curves.clone(),
-        }
-    }
-}
-
-#[derive(Serialize, Clone)]
-struct HttpResponse {
-    diagnosis: String,
-    web_server: String,
-    quality: String,
-    observed: HttpObserved,
-}
-
-fn extract_web_server(web_server: Option<&WebServer>) -> String {
-    if let Some(ws) = web_server {
-        let mut parts = vec![ws.name.clone()];
-        if let Some(family) = &ws.family {
-            parts.push(family.clone());
-        }
-        if let Some(variant) = &ws.variant {
-            parts.push(variant.clone());
-        }
-        parts.join(" ")
-    } else {
-        String::new()
-    }
-}
-
-impl From<&HttpResponseOutput> for HttpResponse {
-    fn from(output: &HttpResponseOutput) -> Self {
-        let horder_str = output
-            .sig
-            .horder
-            .iter()
-            .map(|h| h.to_string())
-            .collect::<Vec<String>>()
-            .join(", ");
-
-        let habsent_str = output
-            .sig
-            .habsent
-            .iter()
-            .map(|h| h.to_string())
-            .collect::<Vec<String>>()
-            .join(", ");
-
-        let expsw_str = output.sig.expsw.clone();
-        let http_signature_observable = HttpObserved {
-            version: output.sig.version.to_string(),
-            horder: horder_str,
-            habsent: habsent_str,
-            expsw: expsw_str,
-        };
-
-        HttpResponse {
-            diagnosis: output.diagnosis.to_string(),
-            web_server: extract_web_server(
-                output.web_server_matched.as_ref().map(|l| &l.web_server),
-            ),
-            quality: output
-                .web_server_matched
-                .as_ref()
-                .map(|l| l.quality.to_string())
-                .unwrap_or_else(|| "0.00".to_string()),
-            observed: http_signature_observable,
-        }
-    }
-}
-
-#[derive(Serialize, Clone)]
-struct Mtu {
-    link: String,
-    mtu: u16,
-}
-
-impl From<&MTUOutput> for Mtu {
-    fn from(output: &MTUOutput) -> Self {
-        Mtu {
-            link: output.link.clone(),
-            mtu: output.mtu,
-        }
-    }
-}
-
-#[derive(Serialize, Clone)]
-pub struct TcpObserved {
-    pub version: String,
-    pub ittl: String,
-    pub olen: u8,
-    pub mss: Option<u16>,
-    pub wsize: String,
-    pub wscale: Option<u8>,
-    pub olayout: String,
-    pub quirks: String,
-    pub pclass: String,
-}
-
-impl From<&ObservableTcp> for TcpObserved {
-    fn from(sig: &ObservableTcp) -> Self {
-        TcpObserved {
-            version: match sig.version {
-                IpVersion::V4 => "IPv4".to_string(),
-                IpVersion::V6 => "IPv6".to_string(),
-                IpVersion::Any => "Unknown IP Version".to_string(),
-            },
-            ittl: match sig.ittl {
-                Ttl::Distance(_, hops) => format!("Distance*{}", hops),
-                Ttl::Value(value) => format!("Value*{}", value),
-                Ttl::Bad(value) => format!("Bad*{}", value),
-                Ttl::Guess(value) => format!("Guess*{}", value),
-            },
-            olen: sig.olen,
-            mss: sig.mss,
-            wsize: match sig.wsize {
-                WindowSize::Mod(val) => format!("MOD*{}", val),
-                WindowSize::Mss(val) => format!("MSS*{}", val),
-                WindowSize::Mtu(val) => format!("MTU*{}", val),
-                WindowSize::Value(val) => format!("Value*{}", val),
-                WindowSize::Any => "Any".to_string(),
-            },
-            wscale: sig.wscale,
-            olayout: sig
-                .olayout
-                .iter()
-                .map(|opt| format!("{:?}", opt))
-                .collect::<Vec<String>>()
-                .join(","),
-            quirks: sig
-                .quirks
-                .iter()
-                .map(|quirk| format!("{:?}", quirk))
-                .collect::<Vec<String>>()
-                .join(","),
-            pclass: match sig.pclass {
-                PayloadSize::Zero => "0".to_string(),
-                PayloadSize::NonZero => "+".to_string(),
-                PayloadSize::Any => "*".to_string(),
-            },
-        }
-    }
-}
-
-#[derive(Serialize, Clone)]
-struct SynAckTCP {
-    os: String,
-    quality: String,
-    dist: String,
-    signature: String,
-    observed: TcpObserved,
-}
-
-fn extract_os(operative_system: Option<&OperativeSystem>) -> String {
-    if let Some(os) = operative_system {
-        let mut parts = vec![os.name.clone()];
-        if let Some(family) = &os.family {
-            parts.push(family.clone());
-        }
-        if let Some(variant) = &os.variant {
-            parts.push(variant.clone());
-        }
-        parts.join(" ")
-    } else {
-        String::new()
-    }
-}
-
-fn extract_dist_string(ttl: &Ttl) -> String {
-    match ttl {
-        Ttl::Distance(_, hops) => hops.to_string(),
-        _ => "0".to_string(),
-    }
-}
-
-impl From<&SynTCPOutput> for SynAckTCP {
-    fn from(output: &SynTCPOutput) -> Self {
-        SynAckTCP {
-            os: extract_os(output.os_matched.as_ref().map(|l| &l.os)),
-            dist: extract_dist_string(&output.sig.ittl),
-            quality: output
-                .os_matched
-                .as_ref()
-                .map(|l| l.quality.to_string())
-                .unwrap_or_else(|| "0.00".to_string()),
-            signature: output.sig.to_string(),
-            observed: TcpObserved::from(&output.sig),
-        }
-    }
-}
-
-impl From<&SynAckTCPOutput> for SynAckTCP {
-    fn from(output: &SynAckTCPOutput) -> Self {
-        SynAckTCP {
-            os: extract_os(output.os_matched.as_ref().map(|l| &l.os)),
-            quality: output
-                .os_matched
-                .as_ref()
-                .map(|l| l.quality.to_string())
-                .unwrap_or_else(|| "0.00".to_string()),
-            dist: extract_dist_string(&output.sig.ittl),
-            signature: output.sig.to_string(),
-            observed: TcpObserved::from(&output.sig),
-        }
-    }
-}
-
-type Cache = Arc<RwLock<HashMap<String, TcpInfo>>>;
-
-struct AppState {
-    _sender: mpsc::Sender<huginn_net::fingerprint_result::FingerprintResult>,
-    cache: Cache,
-}
-
-async fn get_tcp_info(
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    headers: HeaderMap,
-    state: Arc<AppState>,
-) -> Json<impl Serialize> {
-    let client_ip = headers
-        .get("x-forwarded-for")
-        .and_then(|value| value.to_str().ok())
-        .or_else(|| {
-            headers
-                .get("x-real-ip")
-                .and_then(|value| value.to_str().ok())
-        })
-        .map(String::from)
-        .unwrap_or_else(|| addr.ip().to_string());
-
-    let client_port = headers
-        .get("x-remote-port")
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.parse::<u16>().ok())
-        .unwrap_or_else(|| addr.port());
-
-    info!(
-        "HTTP Request from IP: {} and port: {} looking up TCP info",
-        client_ip, client_port
-    );
-
-    let cache = state.cache.read().await;
-    let tcp_info = cache.get(&client_ip).cloned();
-
-    Json(tcp_info)
-}
-
-#[tokio::main]
-async fn main() {
-    tracing_subscriber::fmt::init();
+fn main() {
+    println!("🦉 Huginn Network Profiler - Legacy Entry Point");
+    println!("Redirecting to the new modular huginn-api...");
 
     let args = Args::parse();
 
-    let db = Box::leak(Box::new(Database::default()));
-    let (async_sender, mut async_receiver) =
-        mpsc::channel::<huginn_net::fingerprint_result::FingerprintResult>(100);
-    let (std_sender, std_receiver) = std_mpsc::channel();
+    // Build command for huginn-api
+    let mut cmd = Command::new("cargo");
+    cmd.args(&["run", "--bin", "huginn-api", "--"]);
 
-    let cache: Cache = Arc::new(RwLock::new(HashMap::new()));
+    // Add interface argument
+    cmd.args(&["--interface", &args.interface]);
 
-    // Start the HuginnNet analyzer in a separate thread
-    let interface = args.interface.clone();
-    let db_clone = db;
-    info!("Starting HuginnNet analyzer on interface: {}", interface);
-    std::thread::spawn(move || {
-        debug!("Huginn Net analyzer thread started");
-        let _ = HuginnNet::new(Some(db_clone), 100, None).analyze_network(&interface, std_sender);
-    });
+    // Add port argument
+    cmd.args(&["--port", &args.port.to_string()]);
 
-    // Bridge between std channel and async channel
-    let async_sender_clone = async_sender.clone();
-    std::thread::spawn(move || {
-        debug!("Bridge thread started");
-        while let Ok(output) = std_receiver.recv() {
-            if async_sender_clone.blocking_send(output).is_err() {
-                error!("Failed to send data through async channel");
-                break;
-            }
-        }
-    });
+    // Add TLS arguments if provided
+    if let Some(cert) = &args.cert {
+        cmd.args(&["--cert", cert]);
+    }
 
-    // Process the async messages
-    let cache_clone = Arc::clone(&cache);
-    tokio::spawn(async move {
-        while let Some(output) = async_receiver.recv().await {
-            let (source_ip, source_port): (String, u16) = if let Some(syn) = &output.syn {
-                (syn.source.ip.to_string(), syn.source.port)
-            } else if let Some(syn_ack) = &output.syn_ack {
-                (syn_ack.destination.ip.to_string(), syn_ack.destination.port)
-            } else if let Some(mtu) = &output.mtu {
-                (mtu.source.ip.to_string(), mtu.source.port)
-            } else if let Some(uptime) = &output.uptime {
-                (uptime.source.ip.to_string(), uptime.source.port)
-            } else if let Some(http_req) = &output.http_request {
-                (http_req.source.ip.to_string(), http_req.source.port)
-            } else if let Some(http_res) = &output.http_response {
-                (
-                    http_res.destination.ip.to_string(),
-                    http_res.destination.port,
-                )
-            } else if let Some(tls_client) = &output.tls_client {
-                (tls_client.source.ip.to_string(), tls_client.source.port)
+    if let Some(key) = &args.key {
+        cmd.args(&["--key", key]);
+    }
+
+    // Add upgrade flag if enabled
+    if args.upgrade {
+        cmd.arg("--upgrade");
+    }
+
+    println!("Executing: {:?}", cmd);
+
+    // Execute the command
+    match cmd.status() {
+        Ok(status) => {
+            if status.success() {
+                println!("huginn-api completed successfully");
             } else {
-                continue;
-            };
-
-            info!(
-                "HuginnNet detected packet from: {} and port: {}",
-                source_ip, source_port
-            );
-
-            let mut cache = cache_clone.write().await;
-
-            let tcp_info = cache.entry(source_ip.clone()).or_insert_with(|| TcpInfo {
-                syn: None,
-                syn_ack: None,
-                mtu: None,
-                uptime: None,
-                http_request: None,
-                http_response: None,
-                source_ip: None,
-                tls_client: None,
-            });
-
-            if let Some(syn) = &output.syn {
-                tcp_info.syn = Some(SynAckTCP::from(syn));
+                eprintln!("huginn-api exited with error code: {:?}", status.code());
+                std::process::exit(1);
             }
-            if let Some(syn_ack) = &output.syn_ack {
-                tcp_info.syn_ack = Some(SynAckTCP::from(syn_ack));
-            }
-            if let Some(mtu) = &output.mtu {
-                tcp_info.mtu = Some(Mtu::from(mtu));
-            }
-            if let Some(uptime) = &output.uptime {
-                tcp_info.uptime = Some(Uptime::from(uptime));
-            }
-            if let Some(http_req) = &output.http_request {
-                tcp_info.http_request = Some(HttpRequest::from(http_req));
-            }
-            if let Some(http_res) = &output.http_response {
-                tcp_info.http_response = Some(HttpResponse::from(http_res));
-            }
-            if let Some(tls_client) = &output.tls_client {
-                tcp_info.tls_client = Some(TlsClient::from(tls_client));
-            }
-            tcp_info.source_ip = Some(source_ip);
         }
-    });
-
-    let state = Arc::new(AppState {
-        _sender: async_sender,
-        cache,
-    });
-
-    let app = Router::new()
-        .route(
-            "/tcp-info",
-            get({
-                let state = Arc::clone(&state);
-                move |connect_info, headers| get_tcp_info(connect_info, headers, state)
-            }),
-        )
-        .fallback_service(ServeDir::new("static"));
-
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
-
-    match (&args.cert, &args.key) {
-        (Some(cert_path), Some(key_path)) => {
-            info!("Starting server with TLS support on {}", addr);
-            info!("Certificate: {}", cert_path);
-            info!("Private key: {}", key_path);
-
-            // Load TLS configuration
-            let config = match RustlsConfig::from_pem_file(cert_path, key_path).await {
-                Ok(config) => config,
-                Err(e) => {
-                    error!("Failed to load TLS configuration: {}", e);
-                    warn!("Falling back to HTTP-only mode");
-
-                    info!("Server running on http://{}", addr);
-                    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-                    axum::serve(
-                        listener,
-                        app.into_make_service_with_connect_info::<SocketAddr>(),
-                    )
-                    .await
-                    .unwrap();
-                    return;
-                }
-            };
-
-            let mut server = bind_dual_protocol(addr, config);
-
-            if args.upgrade {
-                info!("HTTP to HTTPS upgrade enabled");
-                server = server.set_upgrade(true);
-            }
-
-            server
-                .serve(app.into_make_service_with_connect_info::<SocketAddr>())
-                .await
-                .unwrap();
-        }
-        _ => {
-            warn!(
-                "No TLS certificates provided, running HTTP-only server on {}",
-                addr
-            );
-
-            let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-            axum::serve(
-                listener,
-                app.into_make_service_with_connect_info::<SocketAddr>(),
-            )
-            .await
-            .unwrap();
+        Err(e) => {
+            eprintln!("Failed to execute huginn-api: {}", e);
+            eprintln!("Make sure huginn-api is built with: cargo build --bin huginn-api");
+            std::process::exit(1);
         }
     }
 }
