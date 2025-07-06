@@ -238,15 +238,15 @@ class UIManager {
                 <div class="profile-timestamp">${timestamp}</div>
             </div>
             <div class="profile-data">
-                ${this.createDataSection('TCP Analysis', profile.tcp_analysis, 'tcp')}
-                ${this.createDataSection('HTTP Analysis', profile.http_analysis, 'http')}
-                ${this.createDataSection('TLS Analysis', profile.tls_analysis, 'tls')}
+                ${this.createDataSection('TCP Analysis', profile.tcp, 'tcp')}
+                ${this.createDataSection('HTTP Analysis', profile.http, 'http')}
+                ${this.createDataSection('TLS Analysis', profile.tls, 'tls')}
                 <div class="data-section">
                     <div class="data-title">Quality Score</div>
                     <div class="data-content">
                         <div class="data-item">
                             <span class="data-label">Score:</span>
-                            <span class="data-value">${qualityScore.toFixed(2)}</span>
+                            <span class="data-value">${(profile.metadata?.completeness || 0).toFixed(2)}</span>
                         </div>
                     </div>
                 </div>
@@ -342,34 +342,42 @@ class UIManager {
                 <h4>Basic Information</h4>
                 <div class="detail-grid">
                     <div class="detail-item">
+                        <span class="detail-label">IP:</span>
+                        <span class="detail-value">${profile.ip || 'Unknown'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Port:</span>
+                        <span class="detail-value">${profile.port || 'Unknown'}</span>
+                    </div>
+                    <div class="detail-item">
                         <span class="detail-label">Timestamp:</span>
                         <span class="detail-value">${profile.timestamp || 'Unknown'}</span>
                     </div>
                     <div class="detail-item">
-                        <span class="detail-label">Quality Score:</span>
-                        <span class="detail-value">${(profile.quality_score || 0).toFixed(2)}</span>
+                        <span class="detail-label">Completeness:</span>
+                        <span class="detail-value">${(profile.metadata?.completeness || 0).toFixed(2)}</span>
                     </div>
                     <div class="detail-item">
-                        <span class="detail-label">Complete:</span>
-                        <span class="detail-value">${profile.is_complete ? 'Yes' : 'No'}</span>
+                        <span class="detail-label">Packet Count:</span>
+                        <span class="detail-value">${profile.metadata?.packet_count || 0}</span>
                     </div>
                 </div>
             </div>
         `;
 
         // TCP Analysis
-        if (profile.tcp_analysis) {
-            html += this.createDetailSection('TCP Analysis', profile.tcp_analysis);
+        if (profile.tcp) {
+            html += this.createDetailSection('TCP Analysis', profile.tcp);
         }
 
         // HTTP Analysis
-        if (profile.http_analysis) {
-            html += this.createDetailSection('HTTP Analysis', profile.http_analysis);
+        if (profile.http) {
+            html += this.createDetailSection('HTTP Analysis', profile.http);
         }
 
         // TLS Analysis
-        if (profile.tls_analysis) {
-            html += this.createDetailSection('TLS Analysis', profile.tls_analysis);
+        if (profile.tls) {
+            html += this.createDetailSection('TLS Analysis', profile.tls);
         }
 
         html += '</div>';
@@ -410,13 +418,13 @@ class UIManager {
             filtered = filtered.filter(([key, profile]) => {
                 switch (this.currentFilter) {
                     case 'tcp':
-                        return profile.tcp_analysis;
+                        return profile.tcp;
                     case 'http':
-                        return profile.http_analysis;
+                        return profile.http;
                     case 'tls':
-                        return profile.tls_analysis;
+                        return profile.tls;
                     case 'complete':
-                        return profile.is_complete;
+                        return profile.metadata?.completeness >= 1.0;
                     default:
                         return true;
                 }

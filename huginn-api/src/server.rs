@@ -14,7 +14,7 @@ use tower_http::{
     services::ServeDir,
     trace::TraceLayer,
 };
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 /// Configuration for the API server
 #[derive(Debug, Clone)]
@@ -206,13 +206,13 @@ impl ApiServer {
         self.state = AppState::with_collector(collector_handle);
 
         // Start profile polling task
-        let _state_clone = self.state.clone();
+        let state_clone = self.state.clone();
         let collector_handle_clone = self.state.collector_handle.as_ref().unwrap().clone();
 
         tokio::spawn(async move {
             info!("Starting profile polling task");
 
-            let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(2));
 
             loop {
                 interval.tick().await;
@@ -223,10 +223,20 @@ impl ApiServer {
                     break;
                 }
 
-                // For now, we'll poll profiles from the collector
-                // In a future version, we could implement a callback system
-                // This is a placeholder - the collector doesn't expose profiles yet
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                // Get profiles from the collector
+                match collector_handle_clone.get_profiles().await {
+                    Ok(profiles) => {
+                        if !profiles.is_empty() {
+                            info!("Retrieved {} profiles from collector", profiles.len());
+                            state_clone.update_profiles(profiles);
+                        } else {
+                            debug!("No profiles available from collector");
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to get profiles from collector: {}", e);
+                    }
+                }
             }
 
             warn!("Profile polling task ended");

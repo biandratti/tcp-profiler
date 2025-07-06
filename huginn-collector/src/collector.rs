@@ -5,9 +5,22 @@ use huginn_core::{HuginnAnalyzer, LoggingEventHandler, TrafficProfile};
 use huginn_net::fingerprint_result::FingerprintResult;
 use huginn_net::{db::Database, HuginnNet};
 use std::collections::HashMap;
-use tokio::sync::mpsc as async_mpsc;
+use tokio::sync::{mpsc as async_mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
+
+/// Commands that can be sent to the collector
+#[derive(Debug)]
+pub enum CollectorCommand {
+    /// Get all profiles
+    GetProfiles(oneshot::Sender<HashMap<String, TrafficProfile>>),
+    /// Get a specific profile by key
+    GetProfile(String, oneshot::Sender<Option<TrafficProfile>>),
+    /// Get profile count
+    GetProfileCount(oneshot::Sender<usize>),
+    /// Clear all profiles
+    ClearProfiles,
+}
 
 /// Handle for controlling a running network collector
 pub struct CollectorHandle {
@@ -19,9 +32,58 @@ pub struct CollectorHandle {
     processor_handle: Option<JoinHandle<Result<()>>>,
     /// Channel to send shutdown signal
     shutdown_sender: Option<async_mpsc::Sender<()>>,
+    /// Channel to send commands to the collector
+    command_sender: async_mpsc::Sender<CollectorCommand>,
 }
 
 impl CollectorHandle {
+    /// Get all profiles from the collector
+    pub async fn get_profiles(&self) -> Result<HashMap<String, TrafficProfile>> {
+        let (tx, rx) = oneshot::channel();
+
+        self.command_sender
+            .send(CollectorCommand::GetProfiles(tx))
+            .await
+            .map_err(|_| CollectorError::channel("Failed to send get_profiles command"))?;
+
+        rx.await
+            .map_err(|_| CollectorError::channel("Failed to receive profiles response"))
+    }
+
+    /// Get a specific profile by key
+    pub async fn get_profile(&self, key: &str) -> Result<Option<TrafficProfile>> {
+        let (tx, rx) = oneshot::channel();
+
+        self.command_sender
+            .send(CollectorCommand::GetProfile(key.to_string(), tx))
+            .await
+            .map_err(|_| CollectorError::channel("Failed to send get_profile command"))?;
+
+        rx.await
+            .map_err(|_| CollectorError::channel("Failed to receive profile response"))
+    }
+
+    /// Get the number of profiles
+    pub async fn get_profile_count(&self) -> Result<usize> {
+        let (tx, rx) = oneshot::channel();
+
+        self.command_sender
+            .send(CollectorCommand::GetProfileCount(tx))
+            .await
+            .map_err(|_| CollectorError::channel("Failed to send get_profile_count command"))?;
+
+        rx.await
+            .map_err(|_| CollectorError::channel("Failed to receive profile count response"))
+    }
+
+    /// Clear all profiles
+    pub async fn clear_profiles(&self) -> Result<()> {
+        self.command_sender
+            .send(CollectorCommand::ClearProfiles)
+            .await
+            .map_err(|_| CollectorError::channel("Failed to send clear_profiles command"))
+    }
+
     /// Stop the collector gracefully
     pub async fn stop(mut self) -> Result<()> {
         info!("Stopping network collector");
@@ -152,9 +214,12 @@ impl NetworkCollector {
         // Create shutdown channel
         let (shutdown_sender, shutdown_receiver) = async_mpsc::channel(1);
 
+        // Create command channel
+        let (command_sender, command_receiver) = async_mpsc::channel(100);
+
         // Start the profile processor
         let processor_handle = tokio::spawn(async move {
-            self.process_profiles(async_receiver, shutdown_receiver)
+            self.process_profiles(async_receiver, shutdown_receiver, command_receiver)
                 .await
         });
 
@@ -163,6 +228,7 @@ impl NetworkCollector {
             bridge_handle: Some(bridge_handle),
             processor_handle: Some(processor_handle),
             shutdown_sender: Some(shutdown_sender),
+            command_sender,
         })
     }
 
@@ -171,6 +237,7 @@ impl NetworkCollector {
         mut self,
         mut receiver: async_mpsc::Receiver<FingerprintResult>,
         mut shutdown: async_mpsc::Receiver<()>,
+        mut command_receiver: async_mpsc::Receiver<CollectorCommand>,
     ) -> Result<()> {
         info!("Starting profile processor");
 
@@ -180,6 +247,28 @@ impl NetworkCollector {
                 Some(result) = receiver.recv() => {
                     if let Err(e) = self.process_fingerprint_result(result).await {
                         error!("Error processing fingerprint result: {}", e);
+                    }
+                }
+
+                // Handle commands from the API
+                Some(command) = command_receiver.recv() => {
+                    match command {
+                        CollectorCommand::GetProfiles(tx) => {
+                            let profiles = self.profiles.clone();
+                            let _ = tx.send(profiles);
+                        }
+                        CollectorCommand::GetProfile(key, tx) => {
+                            let profile = self.profiles.get(&key).cloned();
+                            let _ = tx.send(profile);
+                        }
+                        CollectorCommand::GetProfileCount(tx) => {
+                            let count = self.profiles.len();
+                            let _ = tx.send(count);
+                        }
+                        CollectorCommand::ClearProfiles => {
+                            self.profiles.clear();
+                            info!("Cleared all profiles");
+                        }
                     }
                 }
 
