@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "huginn-core",
+    "huginn-collector",
 ]
 resolver = "2"
 

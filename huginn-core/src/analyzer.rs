@@ -12,7 +12,7 @@ use std::net::IpAddr;
 use std::str::FromStr;
 
 /// Configuration for the Huginn analyzer
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AnalyzerConfig {
     /// Whether to enable TCP analysis
     pub enable_tcp: bool,
