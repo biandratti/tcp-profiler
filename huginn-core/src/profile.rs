@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 
 /// Complete traffic profile for a network endpoint
@@ -158,13 +158,19 @@ impl TrafficProfile {
     fn update_metadata(&mut self) {
         self.metadata.last_updated = Utc::now();
         self.metadata.packet_count += 1;
-        
+
         // Calculate completeness based on available data
         let mut score = 0.0;
-        if self.tcp.is_some() { score += 0.4; }
-        if self.http.is_some() { score += 0.3; }
-        if self.tls.is_some() { score += 0.3; }
-        
+        if self.tcp.is_some() {
+            score += 0.4;
+        }
+        if self.http.is_some() {
+            score += 0.3;
+        }
+        if self.tls.is_some() {
+            score += 0.3;
+        }
+
         self.metadata.completeness = score;
     }
 
@@ -176,14 +182,20 @@ impl TrafficProfile {
     /// Get a summary string of available data
     pub fn summary(&self) -> String {
         let mut parts = Vec::new();
-        if self.tcp.is_some() { parts.push("TCP"); }
-        if self.http.is_some() { parts.push("HTTP"); }
-        if self.tls.is_some() { parts.push("TLS"); }
-        
+        if self.tcp.is_some() {
+            parts.push("TCP");
+        }
+        if self.http.is_some() {
+            parts.push("HTTP");
+        }
+        if self.tls.is_some() {
+            parts.push("TLS");
+        }
+
         if parts.is_empty() {
             "No data".to_string()
         } else {
             parts.join(" + ")
         }
     }
-} 
+}

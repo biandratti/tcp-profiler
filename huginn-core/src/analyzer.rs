@@ -1,11 +1,13 @@
-use crate::profile::{TrafficProfile, TcpAnalysis, HttpAnalysis, TlsAnalysis, TcpDetails, HttpDetails, TlsDetails};
-use crate::events::{TrafficEvent, EventDispatcher};
-use crate::error::{Result, HuginnError};
-use huginn_net::fingerprint_result::*;
-use huginn_net::ObservableTcp;
-use huginn_net::tcp::{IpVersion, PayloadSize, WindowSize};
-use huginn_net::Ttl;
+use crate::error::{HuginnError, Result};
+use crate::events::{EventDispatcher, TrafficEvent};
+use crate::profile::{
+    HttpAnalysis, HttpDetails, TcpAnalysis, TcpDetails, TlsAnalysis, TlsDetails, TrafficProfile,
+};
 use chrono::Utc;
+use huginn_net::fingerprint_result::*;
+use huginn_net::tcp::{IpVersion, PayloadSize, WindowSize};
+use huginn_net::ObservableTcp;
+use huginn_net::Ttl;
 use std::net::IpAddr;
 use std::str::FromStr;
 
@@ -65,7 +67,7 @@ impl HuginnAnalyzer {
     pub fn analyze(&self, result: FingerprintResult) -> Result<Option<TrafficProfile>> {
         // Extract source IP and port from the result
         let (ip, port) = self.extract_ip_port(&result)?;
-        
+
         // Create or update traffic profile
         let mut profile = TrafficProfile::new(ip, port);
 
@@ -94,7 +96,10 @@ impl HuginnAnalyzer {
             } else if let Some(http_res) = &result.http_response {
                 if let Some(http_analysis) = self.analyze_http_response(http_res)? {
                     profile.update_http(http_analysis);
-                    self.emit_http_event_response(&profile, &result.http_response.as_ref().unwrap());
+                    self.emit_http_event_response(
+                        &profile,
+                        &result.http_response.as_ref().unwrap(),
+                    );
                 }
             }
         }
@@ -113,11 +118,12 @@ impl HuginnAnalyzer {
         if profile.is_empty() {
             Ok(None)
         } else {
-            self.event_dispatcher.dispatch(TrafficEvent::ProfileCreated {
-                ip: profile.ip,
-                port: profile.port,
-                timestamp: profile.timestamp,
-            });
+            self.event_dispatcher
+                .dispatch(TrafficEvent::ProfileCreated {
+                    ip: profile.ip,
+                    port: profile.port,
+                    timestamp: profile.timestamp,
+                });
             Ok(Some(profile))
         }
     }
@@ -145,13 +151,17 @@ impl HuginnAnalyzer {
                 .map_err(|e| HuginnError::invalid_data(format!("Invalid IP: {}", e)))?;
             Ok((ip, tls_client.source.port))
         } else {
-            Err(HuginnError::invalid_data("No valid IP/port found in result"))
+            Err(HuginnError::invalid_data(
+                "No valid IP/port found in result",
+            ))
         }
     }
 
     /// Analyze TCP SYN packet
     fn analyze_tcp_syn(&self, syn: &SynTCPOutput) -> Result<Option<TcpAnalysis>> {
-        let quality = syn.os_matched.as_ref()
+        let quality = syn
+            .os_matched
+            .as_ref()
             .map(|m| m.quality as f64)
             .unwrap_or(0.0);
 
@@ -159,7 +169,9 @@ impl HuginnAnalyzer {
             return Ok(None);
         }
 
-        let os = syn.os_matched.as_ref()
+        let os = syn
+            .os_matched
+            .as_ref()
             .map(|m| self.extract_os_string(&m.os))
             .unwrap_or_else(|| "Unknown".to_string());
 
@@ -177,7 +189,9 @@ impl HuginnAnalyzer {
 
     /// Analyze TCP SYN-ACK packet
     fn analyze_tcp_syn_ack(&self, syn_ack: &SynAckTCPOutput) -> Result<Option<TcpAnalysis>> {
-        let quality = syn_ack.os_matched.as_ref()
+        let quality = syn_ack
+            .os_matched
+            .as_ref()
             .map(|m| m.quality as f64)
             .unwrap_or(0.0);
 
@@ -185,7 +199,9 @@ impl HuginnAnalyzer {
             return Ok(None);
         }
 
-        let os = syn_ack.os_matched.as_ref()
+        let os = syn_ack
+            .os_matched
+            .as_ref()
             .map(|m| self.extract_os_string(&m.os))
             .unwrap_or_else(|| "Unknown".to_string());
 
@@ -203,7 +219,9 @@ impl HuginnAnalyzer {
 
     /// Analyze HTTP request
     fn analyze_http_request(&self, http_req: &HttpRequestOutput) -> Result<Option<HttpAnalysis>> {
-        let quality = http_req.browser_matched.as_ref()
+        let quality = http_req
+            .browser_matched
+            .as_ref()
             .map(|m| m.quality as f64)
             .unwrap_or(0.0);
 
@@ -211,17 +229,25 @@ impl HuginnAnalyzer {
             return Ok(None);
         }
 
-        let browser = http_req.browser_matched.as_ref()
+        let browser = http_req
+            .browser_matched
+            .as_ref()
             .map(|m| self.extract_browser_string(&m.browser))
             .unwrap_or_else(|| "Unknown".to_string());
 
         let details = HttpDetails {
             version: http_req.sig.version.to_string(),
-            header_order: http_req.sig.horder.iter()
+            header_order: http_req
+                .sig
+                .horder
+                .iter()
                 .map(|h| h.to_string())
                 .collect::<Vec<_>>()
                 .join(", "),
-            headers_absent: http_req.sig.habsent.iter()
+            headers_absent: http_req
+                .sig
+                .habsent
+                .iter()
                 .map(|h| h.to_string())
                 .collect::<Vec<_>>()
                 .join(", "),
@@ -240,7 +266,9 @@ impl HuginnAnalyzer {
 
     /// Analyze HTTP response
     fn analyze_http_response(&self, http_res: &HttpResponseOutput) -> Result<Option<HttpAnalysis>> {
-        let quality = http_res.web_server_matched.as_ref()
+        let quality = http_res
+            .web_server_matched
+            .as_ref()
             .map(|m| m.quality as f64)
             .unwrap_or(0.0);
 
@@ -248,17 +276,25 @@ impl HuginnAnalyzer {
             return Ok(None);
         }
 
-        let browser = http_res.web_server_matched.as_ref()
+        let browser = http_res
+            .web_server_matched
+            .as_ref()
             .map(|m| self.extract_web_server_string(&m.web_server))
             .unwrap_or_else(|| "Unknown".to_string());
 
         let details = HttpDetails {
             version: http_res.sig.version.to_string(),
-            header_order: http_res.sig.horder.iter()
+            header_order: http_res
+                .sig
+                .horder
+                .iter()
                 .map(|h| h.to_string())
                 .collect::<Vec<_>>()
                 .join(", "),
-            headers_absent: http_res.sig.habsent.iter()
+            headers_absent: http_res
+                .sig
+                .habsent
+                .iter()
                 .map(|h| h.to_string())
                 .collect::<Vec<_>>()
                 .join(", "),
@@ -360,11 +396,15 @@ impl HuginnAnalyzer {
                 WindowSize::Any => "Any".to_string(),
             },
             window_scale: sig.wscale,
-            options_layout: sig.olayout.iter()
+            options_layout: sig
+                .olayout
+                .iter()
                 .map(|opt| format!("{:?}", opt))
                 .collect::<Vec<_>>()
                 .join(","),
-            quirks: sig.quirks.iter()
+            quirks: sig
+                .quirks
+                .iter()
                 .map(|quirk| format!("{:?}", quirk))
                 .collect::<Vec<_>>()
                 .join(","),
@@ -441,4 +481,4 @@ impl Default for HuginnAnalyzer {
     fn default() -> Self {
         Self::new()
     }
-} 
+}

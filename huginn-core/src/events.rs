@@ -1,6 +1,6 @@
 use crate::error::Result;
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 
 /// Events that can occur during traffic analysis
@@ -12,7 +12,7 @@ pub enum TrafficEvent {
         port: u16,
         timestamp: DateTime<Utc>,
     },
-    
+
     /// Traffic profile updated with new data
     ProfileUpdated {
         ip: IpAddr,
@@ -20,7 +20,7 @@ pub enum TrafficEvent {
         data_type: String, // "tcp", "http", "tls"
         timestamp: DateTime<Utc>,
     },
-    
+
     /// TCP analysis completed
     TcpAnalyzed {
         ip: IpAddr,
@@ -29,7 +29,7 @@ pub enum TrafficEvent {
         quality: f64,
         timestamp: DateTime<Utc>,
     },
-    
+
     /// HTTP analysis completed
     HttpAnalyzed {
         ip: IpAddr,
@@ -38,7 +38,7 @@ pub enum TrafficEvent {
         quality: f64,
         timestamp: DateTime<Utc>,
     },
-    
+
     /// TLS analysis completed
     TlsAnalyzed {
         ip: IpAddr,
@@ -46,7 +46,7 @@ pub enum TrafficEvent {
         ja4: String,
         timestamp: DateTime<Utc>,
     },
-    
+
     /// Analysis error occurred
     AnalysisError {
         ip: IpAddr,
@@ -71,19 +71,55 @@ impl EventHandler for LoggingEventHandler {
             TrafficEvent::ProfileCreated { ip, port, .. } => {
                 tracing::info!("New profile created for {}:{}", ip, port);
             }
-            TrafficEvent::ProfileUpdated { ip, port, data_type, .. } => {
-                tracing::info!("Profile updated for {}:{} with {} data", ip, port, data_type);
+            TrafficEvent::ProfileUpdated {
+                ip,
+                port,
+                data_type,
+                ..
+            } => {
+                tracing::info!(
+                    "Profile updated for {}:{} with {} data",
+                    ip,
+                    port,
+                    data_type
+                );
             }
-            TrafficEvent::TcpAnalyzed { ip, port, os, quality, .. } => {
-                tracing::info!("TCP analysis for {}:{} - OS: {} (quality: {:.2})", ip, port, os, quality);
+            TrafficEvent::TcpAnalyzed {
+                ip,
+                port,
+                os,
+                quality,
+                ..
+            } => {
+                tracing::info!(
+                    "TCP analysis for {}:{} - OS: {} (quality: {:.2})",
+                    ip,
+                    port,
+                    os,
+                    quality
+                );
             }
-            TrafficEvent::HttpAnalyzed { ip, port, browser, quality, .. } => {
-                tracing::info!("HTTP analysis for {}:{} - Browser: {} (quality: {:.2})", ip, port, browser, quality);
+            TrafficEvent::HttpAnalyzed {
+                ip,
+                port,
+                browser,
+                quality,
+                ..
+            } => {
+                tracing::info!(
+                    "HTTP analysis for {}:{} - Browser: {} (quality: {:.2})",
+                    ip,
+                    port,
+                    browser,
+                    quality
+                );
             }
             TrafficEvent::TlsAnalyzed { ip, port, ja4, .. } => {
                 tracing::info!("TLS analysis for {}:{} - JA4: {}", ip, port, ja4);
             }
-            TrafficEvent::AnalysisError { ip, port, error, .. } => {
+            TrafficEvent::AnalysisError {
+                ip, port, error, ..
+            } => {
                 tracing::error!("Analysis error for {}:{} - {}", ip, port, error);
             }
         }
@@ -103,12 +139,12 @@ impl EventDispatcher {
             handlers: Vec::new(),
         }
     }
-    
+
     /// Add an event handler
     pub fn add_handler<H: EventHandler + 'static>(&mut self, handler: H) {
         self.handlers.push(Box::new(handler));
     }
-    
+
     /// Dispatch an event to all handlers
     pub fn dispatch(&self, event: TrafficEvent) {
         for handler in &self.handlers {
@@ -137,7 +173,7 @@ impl TrafficEvent {
             TrafficEvent::AnalysisError { ip, .. } => *ip,
         }
     }
-    
+
     /// Get the port from any event
     pub fn port(&self) -> u16 {
         match self {
@@ -149,7 +185,7 @@ impl TrafficEvent {
             TrafficEvent::AnalysisError { port, .. } => *port,
         }
     }
-    
+
     /// Get the timestamp from any event
     pub fn timestamp(&self) -> DateTime<Utc> {
         match self {
@@ -161,4 +197,4 @@ impl TrafficEvent {
             TrafficEvent::AnalysisError { timestamp, .. } => *timestamp,
         }
     }
-} 
+}

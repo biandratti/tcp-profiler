@@ -40,4 +40,4 @@ impl HuginnError {
     pub fn configuration<S: Into<String>>(msg: S) -> Self {
         Self::Configuration(msg.into())
     }
-} 
+}
