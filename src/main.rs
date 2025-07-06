@@ -32,9 +32,7 @@ fn main() {
     // Try to find the huginn-api binary
     let huginn_api_path = std::env::current_exe()
         .ok()
-        .and_then(|exe_path| {
-            exe_path.parent().map(|dir| dir.join("huginn-api"))
-        })
+        .and_then(|exe_path| exe_path.parent().map(|dir| dir.join("huginn-api")))
         .unwrap_or_else(|| std::path::PathBuf::from("./target/release/huginn-api"));
 
     // Build command for huginn-api binary
