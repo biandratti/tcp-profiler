@@ -3,7 +3,7 @@ use axum::{extract::ConnectInfo, response::Json, routing::get, Router};
 use clap::Parser;
 use huginn_net::fingerprint_result::{
     Browser, HttpRequestOutput, HttpResponseOutput, MTUOutput, OperativeSystem, SynAckTCPOutput,
-    SynTCPOutput, UptimeOutput, WebServer,
+    SynTCPOutput, TlsClientOutput, UptimeOutput, WebServer,
 };
 use huginn_net::{
     db::Database,
@@ -36,6 +36,7 @@ struct TcpInfo {
     http_request: Option<HttpRequest>,
     http_response: Option<HttpResponse>,
     source_ip: Option<String>,
+    tls_client: Option<TlsClient>,
 }
 
 #[derive(Serialize, Clone)]
@@ -127,6 +128,39 @@ impl From<&HttpRequestOutput> for HttpRequest {
                 .unwrap_or_else(|| "0.00".to_string()),
             signature: output.sig.to_string(),
             detail: http_signature_detail,
+        }
+    }
+}
+
+#[derive(Serialize, Clone)]
+struct TlsClient {
+    version: String,
+    sni: Option<String>,
+    alpn: Option<String>,
+    cipher_suites: Vec<u16>,
+    extensions: Vec<u16>,
+    signature_algorithms: Vec<u16>,
+    elliptic_curves: Vec<u16>,
+    ja4: String,
+    ja4_r: String,
+    ja4_o: String,
+    ja4_or: String,
+}
+
+impl From<&TlsClientOutput> for TlsClient {
+    fn from(output: &TlsClientOutput) -> Self {
+        TlsClient {
+            version: output.sig.version.to_string(),
+            sni: output.sig.sni.as_ref().map(|s| s.to_string()),
+            alpn: output.sig.alpn.as_ref().map(|s| s.to_string()),
+            cipher_suites: output.sig.cipher_suites.clone(),
+            extensions: output.sig.extensions.clone(),
+            signature_algorithms: output.sig.signature_algorithms.clone(),
+            elliptic_curves: output.sig.elliptic_curves.clone(),
+            ja4: output.sig.ja4.full.to_string(),
+            ja4_r: output.sig.ja4.raw.to_string(),
+            ja4_o: output.sig.ja4_original.full.to_string(),
+            ja4_or: output.sig.ja4_original.raw.to_string(),
         }
     }
 }
@@ -419,6 +453,7 @@ async fn main() {
                 http_request: None,
                 http_response: None,
                 source_ip: None,
+                tls_client: None,
             });
 
             if let Some(syn) = &output.syn {
@@ -438,6 +473,9 @@ async fn main() {
             }
             if let Some(http_res) = &output.http_response {
                 tcp_info.http_response = Some(HttpResponse::from(http_res));
+            }
+            if let Some(tls_client) = &output.tls_client {
+                tcp_info.tls_client = Some(TlsClient::from(tls_client));
             }
             tcp_info.source_ip = Some(source_ip);
         }
