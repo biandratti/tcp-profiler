@@ -299,14 +299,18 @@ impl NetworkCollector {
             Ok(Some(profile)) => {
                 let key = format!("{}:{}", profile.ip, profile.port);
 
-                // Update or insert the profile
-                if self.profiles.contains_key(&key) {
+                // Check if this is a new profile or an update
+                let is_new_profile = !self.profiles.contains_key(&key);
+
+                if is_new_profile {
+                    // Insert new profile
+                    info!("Creating new profile for {}", key);
+                    self.profiles.insert(key, profile);
+                } else {
                     // Merge the new profile data into existing profile
+                    debug!("Updating existing profile for {}", key);
                     let existing = self.profiles.get_mut(&key).unwrap();
                     Self::merge_profiles(existing, profile);
-                } else {
-                    // Insert new profile
-                    self.profiles.insert(key, profile);
                 }
 
                 debug!(

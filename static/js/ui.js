@@ -239,7 +239,8 @@ class UIManager {
             </div>
             <div class="profile-data">
                 ${this.createDataSection('TCP Analysis', profile.tcp, 'tcp')}
-                ${this.createDataSection('HTTP Analysis', profile.http, 'http')}
+                ${this.createHttpRequestSection(profile.http)}
+                ${this.createHttpResponseSection(profile.http)}
                 ${this.createDataSection('TLS Analysis', profile.tls, 'tls')}
                 <div class="data-section">
                     <div class="data-title">Quality Score</div>
@@ -309,6 +310,90 @@ class UIManager {
         `;
     }
 
+    // Create HTTP Request section for profile card
+    createHttpRequestSection(httpData) {
+        if (!httpData || !httpData.request) {
+            return '';
+        }
+
+        let content = '';
+        const maxItems = 3;
+        let itemCount = 0;
+
+        for (const [key, value] of Object.entries(httpData.request)) {
+            if (itemCount >= maxItems) break;
+            
+            let displayValue = value;
+            if (typeof value === 'object' && value !== null) {
+                displayValue = JSON.stringify(value).substring(0, 50) + '...';
+            } else if (typeof value === 'string' && value.length > 30) {
+                displayValue = value.substring(0, 30) + '...';
+            }
+
+            content += `
+                <div class="data-item">
+                    <span class="data-label">${this.formatKey(key)}:</span>
+                    <span class="data-value">${displayValue}</span>
+                </div>
+            `;
+            itemCount++;
+        }
+
+        if (content) {
+            return `
+                <div class="data-section http-request">
+                    <div class="data-title">HTTP Request</div>
+                    <div class="data-content">
+                        ${content}
+                    </div>
+                </div>
+            `;
+        }
+        return '';
+    }
+
+    // Create HTTP Response section for profile card
+    createHttpResponseSection(httpData) {
+        if (!httpData || !httpData.response) {
+            return '';
+        }
+
+        let content = '';
+        const maxItems = 3;
+        let itemCount = 0;
+
+        for (const [key, value] of Object.entries(httpData.response)) {
+            if (itemCount >= maxItems) break;
+            
+            let displayValue = value;
+            if (typeof value === 'object' && value !== null) {
+                displayValue = JSON.stringify(value).substring(0, 50) + '...';
+            } else if (typeof value === 'string' && value.length > 30) {
+                displayValue = value.substring(0, 30) + '...';
+            }
+
+            content += `
+                <div class="data-item">
+                    <span class="data-label">${this.formatKey(key)}:</span>
+                    <span class="data-value">${displayValue}</span>
+                </div>
+            `;
+            itemCount++;
+        }
+
+        if (content) {
+            return `
+                <div class="data-section http-response">
+                    <div class="data-title">HTTP Response</div>
+                    <div class="data-content">
+                        ${content}
+                    </div>
+                </div>
+            `;
+        }
+        return '';
+    }
+
     // Format key for display
     formatKey(key) {
         return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -370,9 +455,25 @@ class UIManager {
             html += this.createDetailSection('TCP Analysis', profile.tcp);
         }
 
-        // HTTP Analysis
+        // HTTP Request Analysis
+        if (profile.http && profile.http.request) {
+            html += this.createDetailSection('HTTP Request (Client)', profile.http.request);
+        }
+
+        // HTTP Response Analysis
+        if (profile.http && profile.http.response) {
+            html += this.createDetailSection('HTTP Response (Server)', profile.http.response);
+        }
+
+        // HTTP General Analysis (for backward compatibility and general HTTP data)
         if (profile.http) {
-            html += this.createDetailSection('HTTP Analysis', profile.http);
+            const generalHttpData = { ...profile.http };
+            delete generalHttpData.request;
+            delete generalHttpData.response;
+            
+            if (Object.keys(generalHttpData).length > 0) {
+                html += this.createDetailSection('HTTP General', generalHttpData);
+            }
         }
 
         // TLS Analysis

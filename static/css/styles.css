@@ -366,6 +366,16 @@ body {
     border-left-color: #9f7aea;
 }
 
+.data-section.http-request {
+    border-left-color: #38a169;
+    background: #f0fff4;
+}
+
+.data-section.http-response {
+    border-left-color: #3182ce;
+    background: #ebf8ff;
+}
+
 .data-title {
     font-size: 0.875rem;
     font-weight: 600;
@@ -562,6 +572,61 @@ body {
     padding: 1.5rem;
     max-height: 60vh;
     overflow-y: auto;
+}
+
+/* Modal Detail Sections */
+.profile-details {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.detail-section {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1.5rem;
+    border-left: 4px solid #667eea;
+}
+
+.detail-section h4 {
+    color: #2d3748;
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.detail-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #4a5568;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.detail-value {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.875rem;
+    color: #2d3748;
+    background: white;
+    padding: 0.5rem;
+    border-radius: 4px;
+    border: 1px solid #e2e8f0;
+    word-break: break-all;
+    white-space: pre-wrap;
 }
 
 /* Responsive Design */

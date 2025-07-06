@@ -10,6 +10,7 @@ use huginn_net::ObservableTcp;
 use huginn_net::Ttl;
 use std::net::IpAddr;
 use std::str::FromStr;
+use tracing::debug;
 
 /// Configuration for the Huginn analyzer
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -65,8 +66,85 @@ impl HuginnAnalyzer {
 
     /// Analyze a fingerprint result and return a traffic profile
     pub fn analyze(&self, result: FingerprintResult) -> Result<Option<TrafficProfile>> {
+        // Debug logging to understand what huginn-net is sending
+        debug!(
+            "=== ANALYZING FingerprintResult ===\n  syn: {}\n  syn_ack: {}\n  http_request: {}\n  http_response: {}\n  tls_client: {}\n  mtu: {}\n  uptime: {}",
+            result.syn.is_some(),
+            result.syn_ack.is_some(),
+            result.http_request.is_some(),
+            result.http_response.is_some(),
+            result.tls_client.is_some(),
+            result.mtu.is_some(),
+            result.uptime.is_some()
+        );
+
+        // Show detailed content for each type
+        if let Some(syn) = &result.syn {
+            debug!(
+                "SYN data: source={}:{}, has_os_match={}",
+                syn.source.ip,
+                syn.source.port,
+                syn.os_matched.is_some()
+            );
+        }
+        if let Some(syn_ack) = &result.syn_ack {
+            debug!(
+                "SYN-ACK data: source={}:{}, dest={}:{}, has_os_match={}",
+                syn_ack.source.ip,
+                syn_ack.source.port,
+                syn_ack.destination.ip,
+                syn_ack.destination.port,
+                syn_ack.os_matched.is_some()
+            );
+        }
+        if let Some(http_req) = &result.http_request {
+            debug!(
+                "HTTP-REQ data: source={}:{}, has_browser_match={}",
+                http_req.source.ip,
+                http_req.source.port,
+                http_req.browser_matched.is_some()
+            );
+        }
+        if let Some(http_res) = &result.http_response {
+            debug!(
+                "HTTP-RES data: source={}:{}, dest={}:{}, has_server_match={}",
+                http_res.source.ip,
+                http_res.source.port,
+                http_res.destination.ip,
+                http_res.destination.port,
+                http_res.web_server_matched.is_some()
+            );
+        }
+        if let Some(tls_client) = &result.tls_client {
+            debug!(
+                "TLS data: source={}:{}",
+                tls_client.source.ip, tls_client.source.port
+            );
+        }
+        if let Some(mtu) = &result.mtu {
+            debug!("MTU data: source={}:{}", mtu.source.ip, mtu.source.port);
+        }
+        if let Some(uptime) = &result.uptime {
+            debug!(
+                "UPTIME data: source={}:{}",
+                uptime.source.ip, uptime.source.port
+            );
+        }
+
         // Extract source IP and port from the result
-        let (ip, port) = self.extract_ip_port(&result)?;
+        let (ip, port) = match self.extract_ip_port(&result) {
+            Ok(ip_port) => {
+                debug!(
+                    "✅ Successfully extracted IP:port {}:{}",
+                    ip_port.0, ip_port.1
+                );
+                ip_port
+            }
+            Err(e) => {
+                debug!("❌ No valid IP/port found in result: {}", e);
+                return Ok(None);
+            }
+        };
 
         // Create or update traffic profile
         let mut profile = TrafficProfile::new(ip, port);
@@ -74,11 +152,19 @@ impl HuginnAnalyzer {
         // Analyze TCP if available and enabled
         if self.config.enable_tcp {
             if let Some(syn) = &result.syn {
+                debug!(
+                    "Processing SYN packet from {}:{}",
+                    syn.source.ip, syn.source.port
+                );
                 if let Some(tcp_analysis) = self.analyze_tcp_syn(syn)? {
                     profile.update_tcp(tcp_analysis);
                     self.emit_tcp_event(&profile, &result.syn.as_ref().unwrap());
                 }
             } else if let Some(syn_ack) = &result.syn_ack {
+                debug!(
+                    "Processing SYN-ACK packet to {}:{}",
+                    syn_ack.destination.ip, syn_ack.destination.port
+                );
                 if let Some(tcp_analysis) = self.analyze_tcp_syn_ack(syn_ack)? {
                     profile.update_tcp(tcp_analysis);
                     self.emit_tcp_event_syn_ack(&profile, &result.syn_ack.as_ref().unwrap());
@@ -90,6 +176,10 @@ impl HuginnAnalyzer {
         if self.config.enable_http {
             // Analyze HTTP request if available
             if let Some(http_req) = &result.http_request {
+                debug!(
+                    "Processing HTTP request from {}:{}",
+                    http_req.source.ip, http_req.source.port
+                );
                 if let Some(http_analysis) = self.analyze_http_request(http_req)? {
                     profile.update_http(http_analysis);
                     self.emit_http_event(&profile, &result.http_request.as_ref().unwrap());
@@ -98,6 +188,10 @@ impl HuginnAnalyzer {
 
             // Analyze HTTP response if available (separate from request)
             if let Some(http_res) = &result.http_response {
+                debug!(
+                    "Processing HTTP response to {}:{}",
+                    http_res.destination.ip, http_res.destination.port
+                );
                 if let Some(http_analysis) = self.analyze_http_response(http_res)? {
                     profile.update_http(http_analysis);
                     self.emit_http_event_response(
@@ -111,6 +205,10 @@ impl HuginnAnalyzer {
         // Analyze TLS if available and enabled
         if self.config.enable_tls {
             if let Some(tls_client) = &result.tls_client {
+                debug!(
+                    "Processing TLS client from {}:{}",
+                    tls_client.source.ip, tls_client.source.port
+                );
                 if let Some(tls_analysis) = self.analyze_tls_client(tls_client)? {
                     profile.update_tls(tls_analysis);
                     self.emit_tls_event(&profile, &result.tls_client.as_ref().unwrap());
@@ -118,16 +216,29 @@ impl HuginnAnalyzer {
             }
         }
 
+        // Check for MTU and uptime data
+        if let Some(mtu) = &result.mtu {
+            debug!("Found MTU data from {}:{}", mtu.source.ip, mtu.source.port);
+        }
+        if let Some(uptime) = &result.uptime {
+            debug!(
+                "Found uptime data from {}:{}",
+                uptime.source.ip, uptime.source.port
+            );
+        }
+
         // Only return profile if it has some data
         if profile.is_empty() {
+            debug!("Profile is empty, not creating");
             Ok(None)
         } else {
-            self.event_dispatcher
-                .dispatch(TrafficEvent::ProfileCreated {
-                    ip: profile.ip,
-                    port: profile.port,
-                    timestamp: profile.timestamp,
-                });
+            debug!(
+                "Created profile for {}:{} with data: {}",
+                profile.ip,
+                profile.port,
+                profile.summary()
+            );
+            // Note: ProfileCreated events are handled by the collector layer
             Ok(Some(profile))
         }
     }
@@ -135,26 +246,49 @@ impl HuginnAnalyzer {
     /// Extract IP and port from fingerprint result
     fn extract_ip_port(&self, result: &FingerprintResult) -> Result<(IpAddr, u16)> {
         if let Some(syn) = &result.syn {
+            // SYN packet: source is the client
+            debug!("Extracting IP/port from SYN packet");
             let ip = IpAddr::from_str(&syn.source.ip.to_string())
                 .map_err(|e| HuginnError::invalid_data(format!("Invalid IP: {}", e)))?;
             Ok((ip, syn.source.port))
         } else if let Some(syn_ack) = &result.syn_ack {
+            // SYN-ACK packet: destination is the client that initiated the connection
+            debug!("Extracting IP/port from SYN-ACK packet");
             let ip = IpAddr::from_str(&syn_ack.destination.ip.to_string())
                 .map_err(|e| HuginnError::invalid_data(format!("Invalid IP: {}", e)))?;
             Ok((ip, syn_ack.destination.port))
         } else if let Some(http_req) = &result.http_request {
+            // HTTP request: source is the client
+            debug!("Extracting IP/port from HTTP request");
             let ip = IpAddr::from_str(&http_req.source.ip.to_string())
                 .map_err(|e| HuginnError::invalid_data(format!("Invalid IP: {}", e)))?;
             Ok((ip, http_req.source.port))
         } else if let Some(http_res) = &result.http_response {
+            // HTTP response: destination is the client that made the request
+            debug!("Extracting IP/port from HTTP response");
             let ip = IpAddr::from_str(&http_res.destination.ip.to_string())
                 .map_err(|e| HuginnError::invalid_data(format!("Invalid IP: {}", e)))?;
             Ok((ip, http_res.destination.port))
         } else if let Some(tls_client) = &result.tls_client {
+            // TLS client: source is the client
+            debug!("Extracting IP/port from TLS client");
             let ip = IpAddr::from_str(&tls_client.source.ip.to_string())
                 .map_err(|e| HuginnError::invalid_data(format!("Invalid IP: {}", e)))?;
             Ok((ip, tls_client.source.port))
+        } else if let Some(mtu) = &result.mtu {
+            // MTU detection: source is the client
+            debug!("Extracting IP/port from MTU data");
+            let ip = IpAddr::from_str(&mtu.source.ip.to_string())
+                .map_err(|e| HuginnError::invalid_data(format!("Invalid IP: {}", e)))?;
+            Ok((ip, mtu.source.port))
+        } else if let Some(uptime) = &result.uptime {
+            // Uptime detection: source is the client
+            debug!("Extracting IP/port from uptime data");
+            let ip = IpAddr::from_str(&uptime.source.ip.to_string())
+                .map_err(|e| HuginnError::invalid_data(format!("Invalid IP: {}", e)))?;
+            Ok((ip, uptime.source.port))
         } else {
+            debug!("No valid data found in FingerprintResult");
             Err(HuginnError::invalid_data(
                 "No valid IP/port found in result",
             ))
