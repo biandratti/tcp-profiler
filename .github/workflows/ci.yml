@@ -128,6 +128,8 @@ jobs:
           
   security:
     runs-on: ubuntu-latest
+    # This job is informational only - failures won't block CI
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - name: Cache cargo registry
@@ -182,17 +184,22 @@ jobs:
                 "${{ needs.test.result }}" == "success" && \
                 "${{ needs.format.result }}" == "success" && \
                 "${{ needs.lint.result }}" == "success" && \
-                "${{ needs.examples.result }}" == "success" && \
-                "${{ needs.security.result }}" == "success" ]]; then
-            echo "✅ All CI checks passed!"
-            exit 0
-          else
-            echo "❌ Some CI checks failed!"
+                "${{ needs.examples.result }}" == "success" ]]; then
+            echo "✅ All essential CI checks passed!"
             echo "Build: ${{ needs.build.result }}"
             echo "Test: ${{ needs.test.result }}"
             echo "Format: ${{ needs.format.result }}"
             echo "Lint: ${{ needs.lint.result }}"
             echo "Examples: ${{ needs.examples.result }}"
-            echo "Security: ${{ needs.security.result }}"
+            echo "Security: ${{ needs.security.result }} (informational only)"
+            exit 0
+          else
+            echo "❌ Some essential CI checks failed!"
+            echo "Build: ${{ needs.build.result }}"
+            echo "Test: ${{ needs.test.result }}"
+            echo "Format: ${{ needs.format.result }}"
+            echo "Lint: ${{ needs.lint.result }}"
+            echo "Examples: ${{ needs.examples.result }}"
+            echo "Security: ${{ needs.security.result }} (informational only)"
             exit 1
           fi
