@@ -54,7 +54,7 @@ jobs:
       - name: Run tests with all features
         run: cargo test --verbose --all-features
       - name: Run doc tests
-        run: cargo test --verbose --doc
+        run: cargo test --verbose --doc --workspace
         
   format:
     runs-on: ubuntu-latest
