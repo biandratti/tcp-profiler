@@ -482,6 +482,8 @@ async fn main() {
                     http_res.destination.ip.to_string(),
                     http_res.destination.port,
                 )
+            } else if let Some(tls_client) = &output.tls_client {
+                (tls_client.source.ip.to_string(), tls_client.source.port)
             } else {
                 continue;
             };

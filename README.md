@@ -78,6 +78,22 @@ This approach is ideal for:
 - Production setups where clients might connect via HTTP by mistake
 - Simplified deployment with a single port configuration
 
+### Important Notes about Traffic Analysis
+
+**Network Traffic Analysis Limitations:**
+
+- **HTTP Traffic**: Only unencrypted HTTP traffic can be fully analyzed (headers, content, etc.)
+- **HTTPS Traffic**: Only the initial TLS handshake can be analyzed before encryption begins
+- **TLS Analysis**: Provides TLS version, cipher suites, extensions, and JA4 fingerprints from the handshake
+- **TCP Analysis**: Always works as it analyzes TCP headers (not encrypted)
+
+**What you'll see:**
+- **HTTP mode**: Full HTTP request/response analysis + TCP analysis
+- **HTTPS mode**: TLS handshake analysis + TCP analysis (no HTTP content analysis)
+- **Both modes**: SYN/SYN-ACK, MTU, and uptime detection
+
+This is expected behavior - encrypted traffic cannot be analyzed for content, only for connection characteristics.
+
 
 ### Build and run docker image
 ```
