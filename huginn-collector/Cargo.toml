@@ -12,13 +12,8 @@ tracing = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
-# Para manejo de errores
 thiserror = "1.0"
-
-# Para canales de comunicación
 tokio-util = "0.7"
-
-# Para configuración
 clap = { workspace = true }
 
 [dev-dependencies]

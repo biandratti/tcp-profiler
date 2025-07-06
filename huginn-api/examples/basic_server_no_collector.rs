@@ -20,14 +20,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         collector_config,
     };
 
-    println!("Starting Huginn API server (without network collector)...");
-    println!("Server will be available at: http://127.0.0.1:3000");
-    println!("API documentation: http://127.0.0.1:3000/api");
-    println!("Try these endpoints:");
-    println!("  GET  http://127.0.0.1:3000/health");
-    println!("  GET  http://127.0.0.1:3000/api");
-    println!("  GET  http://127.0.0.1:3000/api/profiles");
-    println!("  GET  http://127.0.0.1:3000/api/stats");
+    tracing::info!("Starting Huginn API server (without network collector)...");
+    tracing::info!("Server will be available at: http://127.0.0.1:3000");
+    tracing::info!("API documentation: http://127.0.0.1:3000/api");
+    tracing::info!("Available endpoints:");
+    tracing::info!("  GET  http://127.0.0.1:3000/health");
+    tracing::info!("  GET  http://127.0.0.1:3000/api");
+    tracing::info!("  GET  http://127.0.0.1:3000/api/profiles");
+    tracing::info!("  GET  http://127.0.0.1:3000/api/stats");
 
     // Run the server
     run_server_with_config(config).await?;

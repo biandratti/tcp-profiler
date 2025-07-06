@@ -12,8 +12,8 @@ fn main() {
         .event_dispatcher_mut()
         .add_handler(LoggingEventHandler);
 
-    println!("Huginn Core initialized successfully!");
-    println!("Version: {}", huginn_core::VERSION);
+    tracing::info!("Huginn Core initialized successfully!");
+    tracing::info!("Version: {}", huginn_core::VERSION);
 
     // Example of custom configuration
     let config = AnalyzerConfig {
@@ -25,5 +25,5 @@ fn main() {
 
     let _analyzer_with_config = HuginnAnalyzer::with_config(config);
 
-    println!("Custom analyzer configuration created!");
+    tracing::info!("Custom analyzer configuration created!");
 }

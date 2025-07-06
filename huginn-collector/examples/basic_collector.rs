@@ -25,10 +25,8 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Parse command line arguments
     let args = Args::parse();
 
-    // Initialize tracing
     if args.verbose {
         tracing_subscriber::fmt()
             .with_max_level(tracing::Level::DEBUG)
@@ -44,7 +42,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Duration: {} seconds", args.duration);
     info!("Min quality: {}", args.min_quality);
 
-    // Create collector using builder pattern
     let collector = NetworkCollectorBuilder::new(args.interface)
         .min_quality(args.min_quality)
         .buffer_size(100)
@@ -55,7 +52,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .verbose(args.verbose)
         .build()?;
 
-    // Start the collector
     let handle = collector.start()?;
 
     info!("Collector started successfully");
@@ -64,7 +60,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         args.duration
     );
 
-    // Let it run for the specified duration
     sleep(Duration::from_secs(args.duration)).await;
 
     info!("Stopping collector...");

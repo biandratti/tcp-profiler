@@ -24,7 +24,7 @@ tower = { workspace = true }
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
 reqwest = { workspace = true }
-axum-test = "17.3.0"
+axum-test = { workspace = true }
 
 [[bin]]
 name = "huginn-api"

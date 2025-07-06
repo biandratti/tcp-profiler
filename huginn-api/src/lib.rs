@@ -47,7 +47,6 @@ mod tests {
         let config = ApiServerConfig::default();
         let server = ApiServer::new(config);
 
-        // This should not panic
         drop(server);
     }
 

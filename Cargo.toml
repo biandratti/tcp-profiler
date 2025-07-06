@@ -23,6 +23,7 @@ chrono = { version = "0.4", features = ["serde"] }
 arc-swap = "1.7"
 futures = "0.3"
 tower = "0.5"
+axum-test = "17.3.0"
 
 # Legacy package (will be moved to huginn-api later)
 [package]
