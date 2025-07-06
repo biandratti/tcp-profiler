@@ -29,28 +29,31 @@ fn main() {
 
     let args = Args::parse();
 
-    // Build command for huginn-api
-    let mut cmd = Command::new("cargo");
-    cmd.args(["run", "--bin", "huginn-api", "--"]);
+    // Try to find the huginn-api binary
+    let huginn_api_path = std::env::current_exe()
+        .ok()
+        .and_then(|exe_path| {
+            exe_path.parent().map(|dir| dir.join("huginn-api"))
+        })
+        .unwrap_or_else(|| std::path::PathBuf::from("./target/release/huginn-api"));
+
+    // Build command for huginn-api binary
+    let mut cmd = Command::new(&huginn_api_path);
 
     // Add interface argument
     cmd.args(["--interface", &args.interface]);
 
-    // Add port argument
-    cmd.args(["--port", &args.port.to_string()]);
+    // Add bind address (convert port to bind format)
+    let bind_addr = format!("0.0.0.0:{}", args.port);
+    cmd.args(["--bind", &bind_addr]);
 
-    // Add TLS arguments if provided
-    if let Some(cert) = &args.cert {
-        cmd.args(["--cert", cert]);
+    // Note: TLS arguments are not supported by huginn-api yet
+    if args.cert.is_some() || args.key.is_some() {
+        eprintln!("Warning: TLS arguments are not yet supported by huginn-api");
     }
 
-    if let Some(key) = &args.key {
-        cmd.args(["--key", key]);
-    }
-
-    // Add upgrade flag if enabled
     if args.upgrade {
-        cmd.arg("--upgrade");
+        eprintln!("Warning: --upgrade flag is not yet supported by huginn-api");
     }
 
     println!("Executing: {:?}", cmd);

@@ -128,7 +128,6 @@ jobs:
           
   security:
     runs-on: ubuntu-latest
-    # This job is informational only - failures won't block CI
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4

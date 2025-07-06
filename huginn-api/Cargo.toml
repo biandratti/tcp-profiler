@@ -26,6 +26,10 @@ tracing-subscriber = { workspace = true }
 reqwest = { workspace = true }
 axum-test = "17.3.0"
 
+[[bin]]
+name = "huginn-api"
+path = "src/main.rs"
+
 [[example]]
 name = "basic_server"
 path = "examples/basic_server.rs"
