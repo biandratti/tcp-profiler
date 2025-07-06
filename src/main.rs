@@ -31,21 +31,21 @@ fn main() {
 
     // Build command for huginn-api
     let mut cmd = Command::new("cargo");
-    cmd.args(&["run", "--bin", "huginn-api", "--"]);
+    cmd.args(["run", "--bin", "huginn-api", "--"]);
 
     // Add interface argument
-    cmd.args(&["--interface", &args.interface]);
+    cmd.args(["--interface", &args.interface]);
 
     // Add port argument
-    cmd.args(&["--port", &args.port.to_string()]);
+    cmd.args(["--port", &args.port.to_string()]);
 
     // Add TLS arguments if provided
     if let Some(cert) = &args.cert {
-        cmd.args(&["--cert", cert]);
+        cmd.args(["--cert", cert]);
     }
 
     if let Some(key) = &args.key {
-        cmd.args(&["--key", key]);
+        cmd.args(["--key", key]);
     }
 
     // Add upgrade flag if enabled

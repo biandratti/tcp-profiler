@@ -1,5 +1,10 @@
 # Huginn Net Profiler
 
+[![CI](https://github.com/biandratti/huginn-net-profiler/actions/workflows/ci.yml/badge.svg)](https://github.com/biandratti/huginn-net-profiler/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.80+-orange.svg)](https://www.rust-lang.org/)
+[![codecov](https://codecov.io/gh/biandratti/huginn-net-profiler/branch/master/graph/badge.svg)](https://codecov.io/gh/biandratti/huginn-net-profiler)
+
 ## Introduction
 
 This project was built to provide an easy-to-use, web-based interface for testing and profiling TCP, HTTP and TLS connections using the [huginn-net](https://github.com/biandratti/huginn-net) library. The motivation behind this project is to enable researchers, network engineers, and enthusiasts to analyze  connection characteristics in real time, without the need for complex command-line tools or manual packet analysis.

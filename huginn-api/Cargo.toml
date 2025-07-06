@@ -15,25 +15,16 @@ tower-http = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 clap = { workspace = true }
-
-# Para timestamps
 chrono = { workspace = true }
-
-# Para manejo de errores
 thiserror = { workspace = true }
-
-# Para estado compartido
 arc-swap = { workspace = true }
-
-# Para WebSockets (streaming de datos en tiempo real)
 futures = { workspace = true }
-
-# Para CORS
 tower = { workspace = true }
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
 reqwest = { workspace = true }
+axum-test = "17.3.0"
 
 [[example]]
 name = "basic_server"

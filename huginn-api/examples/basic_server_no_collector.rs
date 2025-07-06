@@ -1,7 +1,5 @@
-use huginn_api::{
-    server::{run_server_with_config, ApiServerConfig},
-    CollectorConfig,
-};
+use huginn_api::server::{run_server_with_config, ApiServerConfig};
+use huginn_collector::CollectorConfig;
 use std::net::SocketAddr;
 use tracing_subscriber;
 
