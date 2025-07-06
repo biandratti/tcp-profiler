@@ -8,7 +8,7 @@ use huginn_net::fingerprint_result::{
 use huginn_net::{
     db::Database,
     tcp::{IpVersion, PayloadSize, WindowSize},
-    HuginnNet, ObservableTcp, Ttl,
+    HuginnNet, ObservableTcp, ObservableTlsClient, Ttl,
 };
 use serde::Serialize;
 use std::collections::HashMap;
@@ -58,7 +58,7 @@ impl From<&UptimeOutput> for Uptime {
 }
 
 #[derive(Serialize, Clone)]
-pub struct HttpSignature {
+pub struct HttpObserved {
     pub version: String,
     pub horder: String,
     pub habsent: String,
@@ -72,7 +72,7 @@ struct HttpRequest {
     browser: String,
     quality: String,
     signature: String,
-    detail: HttpSignature,
+    observed: HttpObserved,
 }
 
 fn extract_browser(browser: Option<&Browser>) -> String {
@@ -110,7 +110,7 @@ impl From<&HttpRequestOutput> for HttpRequest {
 
         let expsw_str = output.sig.expsw.clone();
 
-        let http_signature_detail = HttpSignature {
+        let http_signature_observable = HttpObserved {
             version: output.sig.version.to_string(),
             horder: horder_str,
             habsent: habsent_str,
@@ -127,40 +127,53 @@ impl From<&HttpRequestOutput> for HttpRequest {
                 .map(|l| l.quality.to_string())
                 .unwrap_or_else(|| "0.00".to_string()),
             signature: output.sig.to_string(),
-            detail: http_signature_detail,
+            observed: http_signature_observable,
         }
     }
 }
 
 #[derive(Serialize, Clone)]
+pub struct TlsClientObserved {
+    pub version: String,
+    pub sni: Option<String>,
+    pub alpn: Option<String>,
+    pub cipher_suites: Vec<u16>,
+    pub extensions: Vec<u16>,
+    pub signature_algorithms: Vec<u16>,
+    pub elliptic_curves: Vec<u16>,
+}
+
+#[derive(Serialize, Clone)]
 struct TlsClient {
-    version: String,
-    sni: Option<String>,
-    alpn: Option<String>,
-    cipher_suites: Vec<u16>,
-    extensions: Vec<u16>,
-    signature_algorithms: Vec<u16>,
-    elliptic_curves: Vec<u16>,
     ja4: String,
-    ja4_r: String,
-    ja4_o: String,
-    ja4_or: String,
+    ja4_raw: String,
+    ja4_original: String,
+    ja4_original_raw: String,
+    observed: TlsClientObserved,
 }
 
 impl From<&TlsClientOutput> for TlsClient {
     fn from(output: &TlsClientOutput) -> Self {
         TlsClient {
-            version: output.sig.version.to_string(),
-            sni: output.sig.sni.as_ref().map(|s| s.to_string()),
-            alpn: output.sig.alpn.as_ref().map(|s| s.to_string()),
-            cipher_suites: output.sig.cipher_suites.clone(),
-            extensions: output.sig.extensions.clone(),
-            signature_algorithms: output.sig.signature_algorithms.clone(),
-            elliptic_curves: output.sig.elliptic_curves.clone(),
-            ja4: output.sig.ja4.full.to_string(),
-            ja4_r: output.sig.ja4.raw.to_string(),
-            ja4_o: output.sig.ja4_original.full.to_string(),
-            ja4_or: output.sig.ja4_original.raw.to_string(),
+            ja4: output.sig.ja4.full.value().to_string(),
+            ja4_raw: output.sig.ja4.raw.value().to_string(),
+            ja4_original: output.sig.ja4_original.full.value().to_string(),
+            ja4_original_raw: output.sig.ja4_original.raw.value().to_string(),
+            observed: TlsClientObserved::from(&output.sig),
+        }
+    }
+}
+
+impl From<&ObservableTlsClient> for TlsClientObserved {
+    fn from(value: &ObservableTlsClient) -> Self {
+        TlsClientObserved {
+            version: value.version.to_string(),
+            sni: value.sni.as_ref().map(|l| l.to_string()),
+            alpn: value.alpn.as_ref().map(|l| l.to_string()),
+            cipher_suites: value.cipher_suites.clone(),
+            extensions: value.extensions.clone(),
+            signature_algorithms: value.signature_algorithms.clone(),
+            elliptic_curves: value.elliptic_curves.clone(),
         }
     }
 }
@@ -170,7 +183,7 @@ struct HttpResponse {
     diagnosis: String,
     web_server: String,
     quality: String,
-    sig: String,
+    observed: HttpObserved,
 }
 
 fn extract_web_server(web_server: Option<&WebServer>) -> String {
@@ -190,6 +203,30 @@ fn extract_web_server(web_server: Option<&WebServer>) -> String {
 
 impl From<&HttpResponseOutput> for HttpResponse {
     fn from(output: &HttpResponseOutput) -> Self {
+        let horder_str = output
+            .sig
+            .horder
+            .iter()
+            .map(|h| h.to_string())
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        let habsent_str = output
+            .sig
+            .habsent
+            .iter()
+            .map(|h| h.to_string())
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        let expsw_str = output.sig.expsw.clone();
+        let http_signature_observable = HttpObserved {
+            version: output.sig.version.to_string(),
+            horder: horder_str,
+            habsent: habsent_str,
+            expsw: expsw_str,
+        };
+
         HttpResponse {
             diagnosis: output.diagnosis.to_string(),
             web_server: extract_web_server(
@@ -200,7 +237,7 @@ impl From<&HttpResponseOutput> for HttpResponse {
                 .as_ref()
                 .map(|l| l.quality.to_string())
                 .unwrap_or_else(|| "0.00".to_string()),
-            sig: output.sig.to_string(),
+            observed: http_signature_observable,
         }
     }
 }
@@ -221,7 +258,7 @@ impl From<&MTUOutput> for Mtu {
 }
 
 #[derive(Serialize, Clone)]
-pub struct TcpSignature {
+pub struct TcpObserved {
     pub version: String,
     pub ittl: String,
     pub olen: u8,
@@ -233,9 +270,9 @@ pub struct TcpSignature {
     pub pclass: String,
 }
 
-impl From<&ObservableTcp> for TcpSignature {
+impl From<&ObservableTcp> for TcpObserved {
     fn from(sig: &ObservableTcp) -> Self {
-        TcpSignature {
+        TcpObserved {
             version: match sig.version {
                 IpVersion::V4 => "IPv4".to_string(),
                 IpVersion::V6 => "IPv6".to_string(),
@@ -284,7 +321,7 @@ struct SynAckTCP {
     quality: String,
     dist: String,
     signature: String,
-    detail: TcpSignature,
+    observed: TcpObserved,
 }
 
 fn extract_os(operative_system: Option<&OperativeSystem>) -> String {
@@ -320,7 +357,7 @@ impl From<&SynTCPOutput> for SynAckTCP {
                 .map(|l| l.quality.to_string())
                 .unwrap_or_else(|| "0.00".to_string()),
             signature: output.sig.to_string(),
-            detail: TcpSignature::from(&output.sig),
+            observed: TcpObserved::from(&output.sig),
         }
     }
 }
@@ -336,7 +373,7 @@ impl From<&SynAckTCPOutput> for SynAckTCP {
                 .unwrap_or_else(|| "0.00".to_string()),
             dist: extract_dist_string(&output.sig.ittl),
             signature: output.sig.to_string(),
-            detail: TcpSignature::from(&output.sig),
+            observed: TcpObserved::from(&output.sig),
         }
     }
 }
