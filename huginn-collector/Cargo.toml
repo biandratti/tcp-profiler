@@ -1,0 +1,20 @@
+[package]
+name = "huginn-collector"
+version = "0.1.0"
+edition = "2021"
+description = "Network traffic collector for Huginn using huginn-net"
+
+[dependencies]
+huginn-core = { path = "../huginn-core" }
+huginn-net = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+thiserror = "1.0"
+tokio-util = "0.7"
+clap = { workspace = true }
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true } 
