@@ -18,7 +18,7 @@ tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 axum-server-dual-protocol = "0.7.0"
 reqwest = { version = "0.12", features = ["json"] }
-thiserror = "1.0"
+thiserror = "2.0"
 chrono = { version = "0.4", features = ["serde"] }
 arc-swap = "1.7"
 futures = "0.3"
